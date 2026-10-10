@@ -49,6 +49,7 @@
 - 在 [PushPlus 官网](https://www.pushplus.plus/) 获取自己的 Token，并按网站提示绑定通知接收渠道。
 - 添加1个 `repository secret`，命名为 `PUSHPLUS_TOKEN`，值填入 PushPlus Token。Token 只需在 GitHub Secrets 中保存，不要写入代码或日志。
 - 配置后，短信仅汇总能返回有效剩余天数和总积分的记录，保留原有标题及明细格式；有有效账号数据但签到失败的记录仍会通知。全部记录无有效数据或未配置 Cookie 时，发送“Cookie 可能已失效”提醒。完整签到日志仍保留所有域名结果；未配置推送 Token 时跳过通知。迁移后不再使用 `PUSHDEER_SENDKEY`。
+- 短信中的兑换积分不足提示会简写为“积分不足（10/500），暂未兑换”；原有字段顺序、兑换逻辑和日志中的服务端原始结果保持不变。其他兑换结果仍按原样通知。
 - GitHub Actions 默认使用 `cmcc`（中国移动新消息ClawBot）渠道，发送纯文本汇总。请先在 PushPlus 官网的“个人中心 → 渠道配置 → 新消息ClawBot”中完成 Channel API Key 绑定，并发送测试消息确认能收到。Channel API Key 保存在 PushPlus，GitHub 的 `PUSHPLUS_TOKEN` 仍填 PushPlus Token。
 - 如需其他渠道，可在仓库 `Settings → Secrets and variables → Actions → Variables` 中添加 `PUSHPLUS_CHANNEL`（例如 `wechat`、`app`、`webhook`、`mail`）。对应渠道需要配置编码时，再添加 `PUSHPLUS_OPTION`，填写 PushPlus 中的渠道编码；`cmcc` 不需要该参数。
 - 本地运行未设置 `PUSHPLUS_CHANNEL` 时，使用 PushPlus 账户中配置的默认渠道。消息发送是异步的，接口接受请求不表示已经送达；日志会记录消息流水号，可在 PushPlus 查询最终发送结果。详见 [cmcc 官方教程](https://github.com/pushplus/pushplus/blob/main/channel/cmcc.md)。

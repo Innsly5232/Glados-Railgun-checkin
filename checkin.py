@@ -593,6 +593,21 @@ class Checker:
         """获取所有结果"""
         return [result.to_dict() for result in self.results]
 
+    @staticmethod
+    def _format_exchange_for_notification(exchange: str) -> str:
+        """仅将服务端的积分不足提示转换为简短短信，其他结果保持原样。"""
+        match = re.fullmatch(
+            r"兑换失败: Not enough points\. Need ([0-9]+(?:\.[0-9]+)?), have ([0-9]+(?:\.[0-9]+)?)\.?",
+            exchange,
+        )
+        if match is None:
+            return exchange
+        required, available = (
+            value.rstrip("0").rstrip(".") if "." in value else value
+            for value in match.groups()
+        )
+        return f"积分不足（{available}/{required}），暂未兑换"
+
     def format_results(self, *, valid_only: bool = False) -> Tuple[str, str, str]:
         """格式化结果；短信可筛选有效数据，完整日志仍使用所有结果。"""
         results = self.get_results()
@@ -614,7 +629,8 @@ class Checker:
         send_content_lines = []
         log_content_lines = []
         for i, res in enumerate(results, 1):
-            line = f"#{i} P:{res['points']} 剩余:{res['days']} 总积分:{res['points_total']} | {res['status']} | {res['exchange']}"
+            exchange = self._format_exchange_for_notification(res["exchange"]) if valid_only else res["exchange"]
+            line = f"#{i} P:{res['points']} 剩余:{res['days']} 总积分:{res['points_total']} | {res['status']} | {exchange}"
             send_content_lines.append(line)
 
             if self.config.verbose:
