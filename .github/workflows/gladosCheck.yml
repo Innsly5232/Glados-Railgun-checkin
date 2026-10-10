@@ -52,7 +52,7 @@ jobs:
         PUSHPLUS_CHANNEL: ${{ vars.PUSHPLUS_CHANNEL || 'cmcc' }}
         PUSHPLUS_OPTION: ${{ vars.PUSHPLUS_OPTION }}
         GLADOS_COOKIES: ${{ secrets.GLADOS_COOKIES }}
-        GLADOS_EXCHANGE_PLAN: ${{ secrets.GLADOS_EXCHANGE_PLAN || 'plan500' }}
+        GLADOS_EXCHANGE_PLAN: ${{ secrets.GLADOS_EXCHANGE_PLAN }}
         GLADOS_VERBOSE: ${{ secrets.GLADOS_VERBOSE }}
 
     - name: Keep alive
