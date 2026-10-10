@@ -115,7 +115,8 @@ class PushPlusTests(unittest.TestCase):
         post.assert_called_once()
         payload = post.call_args.kwargs["json"]
         self.assertEqual(payload["token"], self.token)
-        self.assertIn("未找到 cookies", payload["title"])
+        self.assertIn("Cookie 可能已失效", payload["title"])
+        self.assertIn("GLADOS_COOKIES", payload["content"])
 
     @patch("checkin.requests.post")
     def test_config_error_still_sends_notification(self, post):

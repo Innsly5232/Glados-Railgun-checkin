@@ -2,6 +2,7 @@ import requests
 import json
 import os
 import logging
+import re
 from enum import Enum
 from typing import Dict, List, Optional, Tuple, Union
 from dataclasses import dataclass, asdict
@@ -509,6 +510,12 @@ class PushService:
 class Checker:
     """签到"""
 
+    COOKIE_ALERT_TITLE = "GLaDOS Cookie 可能已失效"
+    COOKIE_ALERT_CONTENT = (
+        "所有账号和域名均未返回有效的剩余天数和总积分。"
+        "请检查或更新 GLADOS_COOKIES；网络或服务异常也可能导致此情况。"
+    )
+
     def __init__(self, config: Config):
         self.config = config
         self.results = []
@@ -586,9 +593,17 @@ class Checker:
         """获取所有结果"""
         return [result.to_dict() for result in self.results]
 
-    def format_results(self) -> Tuple[str, str, str]:
-        """格式化结果"""
+    def format_results(self, *, valid_only: bool = False) -> Tuple[str, str, str]:
+        """格式化结果；短信可筛选有效数据，完整日志仍使用所有结果。"""
         results = self.get_results()
+        if valid_only:
+            results = [
+                result for result in results
+                if re.fullmatch(r"-?\d+ 天", str(result["days"]))
+                and re.fullmatch(r"-?\d+ 积分", str(result["points_total"]))
+            ]
+            if not results:
+                return self.COOKIE_ALERT_TITLE, self.COOKIE_ALERT_CONTENT, ""
 
         success_count = sum(1 for r in results if r["code"] == CheckinStatus.SUCCESS)
         repeat_count = sum(1 for r in results if r["code"] == CheckinStatus.REPEAT)
@@ -627,7 +642,7 @@ def main():
 
         if not config.cookies_list:
             logger.error(f"{LogEmoji.ERROR} 未找到有效的 Cookie, 退出程序。")
-            title, content = "# 未找到 cookies!", ""
+            title, content = Checker.COOKIE_ALERT_TITLE, Checker.COOKIE_ALERT_CONTENT
         else:
             # 2. 执行签到
             logger.info(f"{LogEmoji.START} 步骤 2: 执行签到")
@@ -638,6 +653,8 @@ def main():
             logger.info(f"{LogEmoji.START} 步骤 3: 格式化结果")
             title, content, log_content = checker.format_results()
             logger.info(f"\n{LogEmoji.END}========== 签到总结 ==========\n{title}\n{log_content}")
+            title, content, _ = checker.format_results(valid_only=True)
+            logger.info(f"{LogEmoji.INFO} 短信通知: {title}")
 
     except Exception as e:
         logger.error(f"{LogEmoji.ERROR} 主程序执行过程中发生未预期的错误: {e}")
