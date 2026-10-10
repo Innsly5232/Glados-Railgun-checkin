@@ -5,7 +5,6 @@ import logging
 from enum import Enum
 from typing import Dict, List, Optional, Tuple, Union
 from dataclasses import dataclass, asdict
-from pypushdeer import PushDeer
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from logging_config import init_logger
@@ -96,7 +95,7 @@ def log_method(func):
 class Config:
     """应用配置"""
 
-    ENV_PUSH_KEY = "PUSHDEER_SENDKEY"
+    ENV_PUSH_TOKEN = "PUSHPLUS_TOKEN"
     ENV_COOKIES = "GLADOS_COOKIES"
     ENV_EXCHANGE_PLAN = "GLADOS_EXCHANGE_PLAN"
     ENV_VERBOSE = "GLADOS_VERBOSE"
@@ -118,7 +117,7 @@ class Config:
     }
 
     def __init__(self):
-        self.push_key: str = ""
+        self.push_token: str = ""
         self.cookies_list: List[str] = []
         self.exchange_plan: str = self.DEFAULT_EXCHANGE_PLAN
         self.verbose: bool = self.DEFAULT_VERBOSE
@@ -126,16 +125,16 @@ class Config:
 
     def _load_config(self) -> None:
         """加载配置"""
-        push_key_env: Optional[str] = os.environ.get(self.ENV_PUSH_KEY)
+        push_token_env: Optional[str] = os.environ.get(self.ENV_PUSH_TOKEN)
         raw_cookies_env: Optional[str] = os.environ.get(self.ENV_COOKIES)
         exchange_plan_env: Optional[str] = os.environ.get(self.ENV_EXCHANGE_PLAN)
         verbose_env: Optional[str] = os.environ.get(self.ENV_VERBOSE)
 
-        if not push_key_env:
-            logger.warning(f"{LogEmoji.WARNING} 环境变量 '{self.ENV_PUSH_KEY}' 未设置。")
-            self.push_key = ""
+        if not push_token_env:
+            logger.warning(f"{LogEmoji.WARNING} 环境变量 '{self.ENV_PUSH_TOKEN}' 未设置。")
+            self.push_token = ""
         else:
-            self.push_key = push_key_env
+            self.push_token = push_token_env
 
         if not raw_cookies_env:
             logger.warning(f"{LogEmoji.WARNING} 环境变量 '{self.ENV_COOKIES}' 未设置。")
@@ -157,7 +156,7 @@ class Config:
                 self.exchange_plan = self.DEFAULT_EXCHANGE_PLAN
 
         logger.info(f"{LogEmoji.INFO} 共加载了 {len(self.cookies_list)} 个 Cookie 用于签到。")
-        logger.info(f"{LogEmoji.INFO} 当前 {self.ENV_PUSH_KEY} {'已设置' if push_key_env else '未设置'}。")
+        logger.info(f"{LogEmoji.INFO} 当前 {self.ENV_PUSH_TOKEN} {'已设置' if push_token_env else '未设置'}。")
         logger.info(f"{LogEmoji.INFO} 当前 {self.ENV_EXCHANGE_PLAN}: {self.exchange_plan}。")
 
         if verbose_env is not None:
@@ -453,22 +452,42 @@ class CheckinResult:
 class PushService:
     """推送服务"""
 
-    def __init__(self, config: Config):
-        self.config = config
+    SEND_URL = "https://www.pushplus.plus/send"
+
+    def __init__(self, config: Optional[Config]):
+        # 配置加载失败时，仍可用环境中的 Token 发送错误通知。
+        self.token = config.push_token if config is not None else os.environ.get(Config.ENV_PUSH_TOKEN, "")
 
     def send(self, title: str, content: str) -> bool:
-        """发送推送"""
-        if not self.config.push_key:
-            logger.info(f"{LogEmoji.WARNING} 未设置推送密钥，跳过推送通知。")
+        """将签到结果提交给 PushPlus（接口接收不代表已送达）。"""
+        if not self.token:
+            logger.info(f"{LogEmoji.WARNING} 未设置 PUSHPLUS_TOKEN，跳过推送通知。")
             return False
 
         try:
-            pushdeer = PushDeer(pushkey=self.config.push_key)
-            pushdeer.send_text(title, desp=content)
-            logger.info(f"{LogEmoji.SUCCESS} 推送通知发送成功。")
+            response = requests.post(
+                self.SEND_URL,
+                json={
+                    "token": self.token,
+                    "title": title,
+                    "content": content,
+                    "template": "txt",
+                },
+                timeout=(10, 30),
+                allow_redirects=False,
+            )
+            if response.status_code != 200:
+                logger.error(f"{LogEmoji.ERROR} PushPlus 推送失败，HTTP 状态码: {response.status_code}")
+                return False
+            result = response.json()
+            if not isinstance(result, dict) or result.get("code") != 200:
+                logger.error(f"{LogEmoji.ERROR} PushPlus 未接受推送请求，请检查 Token、推送额度和服务状态。")
+                return False
+            logger.info(f"{LogEmoji.SUCCESS} PushPlus 推送请求已提交。")
             return True
-        except Exception as e:
-            logger.error(f"{LogEmoji.ERROR} 发送推送通知失败: {e}")
+        except (requests.RequestException, ValueError) as e:
+            # 不输出异常详情或响应正文，避免意外泄露 Token。
+            logger.error(f"{LogEmoji.ERROR} PushPlus 推送失败: {type(e).__name__}")
             return False
 
 
@@ -585,6 +604,7 @@ logger = init_logger()
 
 def main():
     """主函数"""
+    config: Optional[Config] = None
     try:
         # 1. 加载配置
         logger.info(f"{LogEmoji.START} 步骤 1: 加载配置")
@@ -610,7 +630,7 @@ def main():
 
     # 4. 发送推送
     logger.info(f"{LogEmoji.START} 步骤 4: 发送推送")
-    push_service = PushService(config if "config" in locals() else "")
+    push_service = PushService(config)
     push_service.send(title, content)
     logger.info(f"{LogEmoji.END} 签到完成")
 

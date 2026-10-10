@@ -46,7 +46,10 @@
 
 4. 手机推送（非必须）
 
-- 添加1个`repository secret`，命名为`PUSHDEER_SENDKEY`，其值对应 PushDeer key: ([获取地址](https://www.pushdeer.com/product.html))。
+- 在 [PushPlus 官网](https://www.pushplus.plus/) 获取自己的 Token，并按网站提示绑定通知接收渠道。
+- 添加1个 `repository secret`，命名为 `PUSHPLUS_TOKEN`，值填入 PushPlus Token。Token 只需在 GitHub Secrets 中保存，不要写入代码或日志。
+- 配置后，每次运行都会发送签到汇总，包括成功、重复签到和失败；未配置时跳过通知。迁移后不再使用 `PUSHDEER_SENDKEY`。
+- 在 Actions 中手动运行 `auto check`，日志出现“PushPlus 推送请求已提交”表示接口已接受请求；实际送达请在接收渠道或 PushPlus 后台确认。
 
 ### **star**自己的仓库
 
