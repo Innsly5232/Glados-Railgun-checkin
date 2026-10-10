@@ -569,13 +569,20 @@ class Checker:
             # 4. 执行兑换（未配置有效兑换计划时跳过）
             if self.config.exchange_plan in self.config.EXCHANGE_PLANS:
                 required_points = self.config.EXCHANGE_PLANS[self.config.exchange_plan]
-                self._log(
-                    cookie_idx,
-                    domain,
-                    LogEmoji.EXCHANGE,
-                    f"开始兑换 {self.config.exchange_plan} (需要 {required_points} 积分)",
-                )
-                result.exchange = api.exchange(cookie, self.config.exchange_plan, required_points)
+                if points_str == "None 积分":
+                    result.exchange = "未获取到积分，跳过自动兑换"
+                    self._log(cookie_idx, domain, LogEmoji.WARNING, result.exchange, force=True)
+                elif points_num < required_points:
+                    result.exchange = f"积分不足 ({points_num}/{required_points})，跳过自动兑换"
+                    self._log(cookie_idx, domain, LogEmoji.INFO, result.exchange, force=True)
+                else:
+                    self._log(
+                        cookie_idx,
+                        domain,
+                        LogEmoji.EXCHANGE,
+                        f"开始兑换 {self.config.exchange_plan} (需要 {required_points} 积分)",
+                    )
+                    result.exchange = api.exchange(cookie, self.config.exchange_plan, required_points)
             else:
                 result.exchange = "未配置兑换计划，跳过自动兑换"
                 self._log(cookie_idx, domain, LogEmoji.INFO, "未配置兑换计划，跳过自动兑换", force=True)
