@@ -49,6 +49,9 @@
 - 在 [PushPlus 官网](https://www.pushplus.plus/) 获取自己的 Token，并按网站提示绑定通知接收渠道。
 - 添加1个 `repository secret`，命名为 `PUSHPLUS_TOKEN`，值填入 PushPlus Token。Token 只需在 GitHub Secrets 中保存，不要写入代码或日志。
 - 配置后，每次运行都会发送签到汇总，包括成功、重复签到和失败；未配置时跳过通知。迁移后不再使用 `PUSHDEER_SENDKEY`。
+- GitHub Actions 默认使用 `cmcc`（中国移动新消息ClawBot）渠道，发送纯文本汇总。请先在 PushPlus 官网的“个人中心 → 渠道配置 → 新消息ClawBot”中完成 Channel API Key 绑定，并发送测试消息确认能收到。Channel API Key 保存在 PushPlus，GitHub 的 `PUSHPLUS_TOKEN` 仍填 PushPlus Token。
+- 如需其他渠道，可在仓库 `Settings → Secrets and variables → Actions → Variables` 中添加 `PUSHPLUS_CHANNEL`（例如 `wechat`、`app`、`webhook`、`mail`）。对应渠道需要配置编码时，再添加 `PUSHPLUS_OPTION`，填写 PushPlus 中的渠道编码；`cmcc` 不需要该参数。
+- 本地运行未设置 `PUSHPLUS_CHANNEL` 时，使用 PushPlus 账户中配置的默认渠道。消息发送是异步的，接口接受请求不表示已经送达；日志会记录消息流水号，可在 PushPlus 查询最终发送结果。详见 [cmcc 官方教程](https://github.com/pushplus/pushplus/blob/main/channel/cmcc.md)。
 - 在 Actions 中手动运行 `auto check`，日志出现“PushPlus 推送请求已提交”表示接口已接受请求；实际送达请在接收渠道或 PushPlus 后台确认。
 
 ### **star**自己的仓库

@@ -11,11 +11,11 @@ import checkin
 class PushPlusTests(unittest.TestCase):
     def setUp(self):
         self.token = "test-pushplus-token"
-        self.service = checkin.PushService(SimpleNamespace(push_token=self.token))
+        self.service = checkin.PushService(SimpleNamespace(push_token=self.token, push_channel="", push_option=""))
 
     @patch("checkin.requests.post")
     def test_missing_token_skips_request(self, post):
-        service = checkin.PushService(SimpleNamespace(push_token=""))
+        service = checkin.PushService(SimpleNamespace(push_token="", push_channel="", push_option=""))
         self.assertFalse(service.send("title", "content"))
         post.assert_not_called()
 
@@ -75,6 +75,36 @@ class PushPlusTests(unittest.TestCase):
     def test_config_reads_pushplus_token(self):
         with patch.dict(os.environ, {"PUSHPLUS_TOKEN": self.token}, clear=True):
             self.assertEqual(checkin.Config().push_token, self.token)
+
+    @patch("checkin.requests.post")
+    def test_selected_channel_and_option_are_sent(self, post):
+        post.return_value = Mock(status_code=200)
+        post.return_value.json.return_value = {"code": 200}
+        for channel, option in (("cmcc", ""), ("app", ""), ("webhook", "my-robot"), ("mail", "")):
+            with self.subTest(channel=channel):
+                config = SimpleNamespace(push_token=self.token, push_channel=channel, push_option=option)
+                self.assertTrue(checkin.PushService(config).send("title", "content"))
+                payload = post.call_args.kwargs["json"]
+                self.assertEqual(payload["channel"], channel)
+                if option:
+                    self.assertEqual(payload["option"], option)
+                else:
+                    self.assertNotIn("option", payload)
+
+    def test_config_reads_channel_and_option(self):
+        with patch.dict(os.environ, {"PUSHPLUS_CHANNEL": " app ", "PUSHPLUS_OPTION": " "}, clear=True):
+            config = checkin.Config()
+        self.assertEqual(config.push_channel, "app")
+        self.assertEqual(config.push_option, "")
+
+    @patch("checkin.requests.post")
+    def test_message_id_is_logged_without_token(self, post):
+        post.return_value = Mock(status_code=200)
+        post.return_value.json.return_value = {"code": 200, "data": "3cbc5eab19fe512e80677540fbde332a"}
+        with self.assertLogs(level="INFO") as logs:
+            self.assertTrue(self.service.send("title", "content"))
+        self.assertIn("3cbc5eab19fe512e80677540fbde332a", "\n".join(logs.output))
+        self.assertNotIn(self.token, "\n".join(logs.output))
 
     @patch("checkin.requests.post")
     def test_missing_cookies_still_sends_notification(self, post):

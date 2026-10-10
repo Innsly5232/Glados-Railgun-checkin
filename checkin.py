@@ -96,6 +96,8 @@ class Config:
     """应用配置"""
 
     ENV_PUSH_TOKEN = "PUSHPLUS_TOKEN"
+    ENV_PUSH_CHANNEL = "PUSHPLUS_CHANNEL"
+    ENV_PUSH_OPTION = "PUSHPLUS_OPTION"
     ENV_COOKIES = "GLADOS_COOKIES"
     ENV_EXCHANGE_PLAN = "GLADOS_EXCHANGE_PLAN"
     ENV_VERBOSE = "GLADOS_VERBOSE"
@@ -118,6 +120,8 @@ class Config:
 
     def __init__(self):
         self.push_token: str = ""
+        self.push_channel: str = os.environ.get(self.ENV_PUSH_CHANNEL, "").strip()
+        self.push_option: str = os.environ.get(self.ENV_PUSH_OPTION, "").strip()
         self.cookies_list: List[str] = []
         self.exchange_plan: str = self.DEFAULT_EXCHANGE_PLAN
         self.verbose: bool = self.DEFAULT_VERBOSE
@@ -457,6 +461,8 @@ class PushService:
     def __init__(self, config: Optional[Config]):
         # 配置加载失败时，仍可用环境中的 Token 发送错误通知。
         self.token = config.push_token if config is not None else os.environ.get(Config.ENV_PUSH_TOKEN, "")
+        self.channel = config.push_channel if config is not None else os.environ.get(Config.ENV_PUSH_CHANNEL, "").strip()
+        self.option = config.push_option if config is not None else os.environ.get(Config.ENV_PUSH_OPTION, "").strip()
 
     def send(self, title: str, content: str) -> bool:
         """将签到结果提交给 PushPlus（接口接收不代表已送达）。"""
@@ -464,15 +470,21 @@ class PushService:
             logger.info(f"{LogEmoji.WARNING} 未设置 PUSHPLUS_TOKEN，跳过推送通知。")
             return False
 
+        payload = {
+            "token": self.token,
+            "title": title,
+            "content": content,
+            "template": "txt",
+        }
+        if self.channel:
+            payload["channel"] = self.channel
+        if self.option:
+            payload["option"] = self.option
+
         try:
             response = requests.post(
                 self.SEND_URL,
-                json={
-                    "token": self.token,
-                    "title": title,
-                    "content": content,
-                    "template": "txt",
-                },
+                json=payload,
                 timeout=(10, 30),
                 allow_redirects=False,
             )
@@ -483,7 +495,10 @@ class PushService:
             if not isinstance(result, dict) or result.get("code") != 200:
                 logger.error(f"{LogEmoji.ERROR} PushPlus 未接受推送请求，请检查 Token、推送额度和服务状态。")
                 return False
-            logger.info(f"{LogEmoji.SUCCESS} PushPlus 推送请求已提交。")
+            logger.info(f"{LogEmoji.SUCCESS} PushPlus 推送请求已提交，请在 PushPlus 查询最终发送结果。")
+            short_code = result.get("data")
+            if isinstance(short_code, str) and short_code.isalnum() and len(short_code) <= 64 and short_code != self.token:
+                logger.info(f"{LogEmoji.INFO} PushPlus 消息流水号: {short_code}")
             return True
         except (requests.RequestException, ValueError) as e:
             # 不输出异常详情或响应正文，避免意外泄露 Token。
