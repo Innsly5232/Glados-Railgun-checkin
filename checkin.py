@@ -239,7 +239,7 @@ class API:
         """获取请求头"""
         return {
             "origin": f"https://{self.domain}",
-            "user-agent": PLATFORM_UA["Windows"],
+            "user-agent": PLATFORM_UA["macOS"],
         }
 
     def _log(self, level: str, emoji: str, message: str, force: bool = False) -> None:

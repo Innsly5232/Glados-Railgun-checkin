@@ -78,6 +78,7 @@
 
 
 ## 问题排查与定位
+- 本仓库默认使用 macOS 平台的 User-Agent，与当前两个账号的登录设备一致，避免首次请求使用 Windows 标识触发设备不匹配。若以后改用其他平台登录并更新 Cookie，需相应调整默认平台；原有设备自适应重试仍保留。
 - 大家可以通过查询 actions 中的 running checkin 日志快速定位问题，有其他问题提交issue。
 - 若日志出现 `code : 4, message : Automated check-in detected`：这是 GLaDOS 的**设备平台校验**（`reason=device-mismatch`，即签到请求 UA 平台与登录设备平台不一致）。脚本已内置**设备平台自适应**：首次失败时自动读取服务端返回的 `loginDevice` 并切换对应平台 UA 重试，**无需手动配置 User-Agent**；若长期仍失败，请重新登录 glados.cloud 手动签到一次并刷新 cookie。
 
