@@ -1,6 +1,7 @@
 import requests
 import json
 import os
+import sys
 import logging
 import re
 from enum import Enum
@@ -651,6 +652,7 @@ logger = init_logger()
 def main():
     """主函数"""
     config: Optional[Config] = None
+    exit_code = 0
     try:
         # 1. 加载配置
         logger.info(f"{LogEmoji.START} 步骤 1: 加载配置")
@@ -675,12 +677,16 @@ def main():
     except Exception as e:
         logger.error(f"{LogEmoji.ERROR} 主程序执行过程中发生未预期的错误: {e}")
         title, content, log_content = "# 脚本执行出错", str(e), str(e)
+        exit_code = 1
 
     # 4. 发送推送
     logger.info(f"{LogEmoji.START} 步骤 4: 发送推送")
     push_service = PushService(config)
     push_service.send(title, content)
     logger.info(f"{LogEmoji.END} 签到完成")
+
+    if exit_code != 0:
+        sys.exit(exit_code)
 
 
 if __name__ == "__main__":

@@ -123,7 +123,9 @@ class PushPlusTests(unittest.TestCase):
         post.return_value = Mock(status_code=200)
         post.return_value.json.return_value = {"code": 200}
         with patch.dict(os.environ, {"PUSHPLUS_TOKEN": self.token, "GLADOS_COOKIES": " & "}, clear=True):
-            checkin.main()
+            with self.assertRaises(SystemExit) as raised:
+                checkin.main()
+        self.assertEqual(raised.exception.code, 1)
         post.assert_called_once()
         payload = post.call_args.kwargs["json"]
         self.assertEqual(payload["token"], self.token)
