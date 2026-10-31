@@ -13,6 +13,13 @@ class PushPlusTests(unittest.TestCase):
         self.token = "test-pushplus-token"
         self.service = checkin.PushService(SimpleNamespace(push_token=self.token, push_channel="", push_option=""))
 
+    def test_hermes_route_takes_priority(self):
+        with patch.dict(os.environ, {"HERMES_WEBHOOK_SECRET": "test-secret"}), \
+                patch("hermes_notify.send") as deliver, patch("checkin.requests.post") as post:
+            self.assertTrue(self.service.send("title", "content"))
+        deliver.assert_called_once_with("title", "content", route="github-glados")
+        post.assert_not_called()
+
     @patch("checkin.requests.post")
     def test_missing_token_skips_request(self, post):
         service = checkin.PushService(SimpleNamespace(push_token="", push_channel="", push_option=""))

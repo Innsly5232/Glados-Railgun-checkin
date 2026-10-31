@@ -137,7 +137,8 @@ class Config:
         verbose_env: Optional[str] = os.environ.get(self.ENV_VERBOSE)
 
         if not push_token_env:
-            logger.warning(f"{LogEmoji.WARNING} 环境变量 '{self.ENV_PUSH_TOKEN}' 未设置。")
+            if not os.environ.get("HERMES_WEBHOOK_SECRET"):
+                logger.warning(f"{LogEmoji.WARNING} 环境变量 '{self.ENV_PUSH_TOKEN}' 未设置。")
             self.push_token = ""
         else:
             self.push_token = push_token_env
@@ -468,6 +469,15 @@ class PushService:
 
     def send(self, title: str, content: str) -> bool:
         """将签到结果提交给 PushPlus（接口接收不代表已送达）。"""
+        if os.environ.get("HERMES_WEBHOOK_SECRET"):
+            try:
+                import hermes_notify
+                hermes_notify.send(title, content, route="github-glados")
+                logger.info("Hermes confirmed WeChat notification delivery.")
+                return True
+            except Exception:
+                logger.error("Hermes WeChat notification was not confirmed.")
+                return False
         if not self.token:
             logger.info(f"{LogEmoji.WARNING} 未设置 PUSHPLUS_TOKEN，跳过推送通知。")
             return False
@@ -682,7 +692,9 @@ def main():
     # 4. 发送推送
     logger.info(f"{LogEmoji.START} 步骤 4: 发送推送")
     push_service = PushService(config)
-    push_service.send(title, content)
+    delivered = push_service.send(title, content)
+    if os.environ.get("HERMES_WEBHOOK_SECRET") and not delivered:
+        exit_code = 1
     logger.info(f"{LogEmoji.END} 签到完成")
 
     if exit_code != 0:

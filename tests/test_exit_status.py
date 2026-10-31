@@ -6,6 +6,13 @@ import checkin
 
 
 class ExitStatusTests(unittest.TestCase):
+    def test_hermes_delivery_failure_marks_action_failed(self):
+        with patch.dict(os.environ, {"HERMES_WEBHOOK_SECRET": "test-secret"}, clear=True), patch(
+                "checkin.PushService.send", return_value=False):
+            with self.assertRaises(SystemExit) as raised:
+                checkin.main()
+        self.assertEqual(raised.exception.code, 1)
+
     def test_unexpected_checker_error_notifies_before_exiting_with_failure(self):
         for push_code in (200, 100):
             with self.subTest(push_code=push_code):
