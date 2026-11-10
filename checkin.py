@@ -1129,7 +1129,7 @@ class Report:
 
 class PushService:
     """通过 Hermes 发送通知。"""
-    HERMES_ROUTE = "github-hopegoo"
+    HERMES_ROUTE = "github-glados"
     COOKIE_ALERT_TITLE = "GLaDOS Cookie 可能已失效"
     COOKIE_ALERT_CONTENT = (
         "所有账号和域名均未返回有效的剩余天数和总积分。"
