@@ -18,7 +18,7 @@ class HermesNotificationTests(unittest.TestCase):
         deliver.assert_called_once_with(
             "# 脚本执行出错",
             "test content",
-            route="github-glados",
+            route="github-hopegoo",
         )
 
     def test_missing_hermes_secret_skips_notification(self):

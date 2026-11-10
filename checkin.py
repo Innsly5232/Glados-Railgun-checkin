@@ -1129,6 +1129,7 @@ class Report:
 
 class PushService:
     """通过 Hermes 发送通知。"""
+    HERMES_ROUTE = "github-hopegoo"
     COOKIE_ALERT_TITLE = "GLaDOS Cookie 可能已失效"
     COOKIE_ALERT_CONTENT = (
         "所有账号和域名均未返回有效的剩余天数和总积分。"
@@ -1191,7 +1192,7 @@ class PushService:
         if self.hermes_secret or os.environ.get(Config.ENV_HERMES_SECRET):
             try:
                 import hermes_notify
-                hermes_notify.send(title, content, route="github-glados")
+                hermes_notify.send(title, content, route=self.HERMES_ROUTE)
                 logger.info("Hermes confirmed WeChat notification delivery.")
                 return True
             except Exception:
