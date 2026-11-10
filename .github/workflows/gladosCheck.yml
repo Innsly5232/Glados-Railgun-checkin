@@ -1,4 +1,4 @@
-name: auto check
+name: GLaDOS Check-in
 
 on:
   workflow_dispatch:
@@ -11,10 +11,18 @@ on:
     - cron: '18 9,12 * * *'
       timezone: 'Asia/Shanghai'
 
+# 定时与手动触发可能重叠：同一时间只保留一个运行，避免重复签到与重复推送
+concurrency:
+  group: glados-checkin
+  cancel-in-progress: false
+
 jobs:
   build:
     name: glados/railgun checkin
     runs-on: ubuntu-latest
+
+    # 脚本自带 5 分钟运行预算；这里再兜底，避免异常情况卡住
+    timeout-minutes: 15
       
     permissions:
       contents: read
@@ -41,26 +49,25 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install requests
+        pip install -r requirements.txt
 
     # 执行 签到脚本
     - name: Running checkin
       run: |
         python checkin.py
       env:
-        PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
         HERMES_WEBHOOK_SECRET: ${{ secrets.HERMES_WEBHOOK_SECRET }}
         HERMES_WEBHOOK_SSH_KEY: ${{ secrets.HERMES_WEBHOOK_SSH_KEY }}
-        PUSHPLUS_CHANNEL: ${{ vars.PUSHPLUS_CHANNEL || 'cmcc' }}
-        PUSHPLUS_OPTION: ${{ vars.PUSHPLUS_OPTION }}
         GLADOS_COOKIES: ${{ secrets.GLADOS_COOKIES }}
         GLADOS_EXCHANGE_PLAN: ${{ secrets.GLADOS_EXCHANGE_PLAN }}
         GLADOS_VERBOSE: ${{ secrets.GLADOS_VERBOSE }}
 
     - name: Keep alive
+      if: ${{ !cancelled() }}
       uses: liskin/gh-workflow-keepalive@v1 
         
     - name: Delete workflow runs
+      if: ${{ !cancelled() }}
       uses: Mattraks/delete-workflow-runs@v2
       with:
         token: ${{ github.token }}

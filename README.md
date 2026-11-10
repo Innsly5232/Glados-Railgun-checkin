@@ -1,97 +1,343 @@
-# Glados自动签到
+<div align="center">
 
-## 食用方式：
+# GLaDOS 自动签到
 
-### 注册一个GLaDOS的账号([注册地址](https://glados.space/landing/0A58E-NV28S-6U3QV-33VMG))
+<p><sub>每天自动完成签到，结果可推送到手机。</sub></p>
 
-#### 我的邀请码：([0A58E-NV28S-6U3QV-33VMG](https://0a58e-nv28s-6u3qv-33vmg.glados.space)) 
+支持 **多账号** · **域名自动探测** · **设备自适应** · **单轮时间预算**，运行在 GitHub Actions 上，无需服务器。
 
-#### 我的优惠码（9折）：([DEVILSTORE](https://0a58e-nv28s-6u3qv-33vmg.glados.space)) 
+[![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-yellow.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.13-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![GLaDOS Check-in](https://github.com/Innsly5232/Glados-Railgun-checkin/actions/workflows/gladosCheck.yml/badge.svg?branch=master)](https://github.com/Innsly5232/Glados-Railgun-checkin/actions/workflows/gladosCheck.yml)
+[![Last commit](https://img.shields.io/github/last-commit/Innsly5232/Glados-Railgun-checkin?branch=master)](https://github.com/Innsly5232/Glados-Railgun-checkin/commits/master)
 
-### **Fork**本仓库
+[快速开始](#快速开始) · [账号配置](#配置-glados_cookies) · [积分兑换](#积分兑换) · [消息推送](#消息推送) · [问题排查](#问题排查) · [常见问题](#常见问题faq)
 
-![图片加载失败](imgs/1.png)
+</div>
 
-### 添加**secret**
+---
 
-1. 跳转至自己的仓库的`Settings`->`Secrets and variables`->`Action`
+> [!NOTE]
+> 非官方项目，与 GLaDOS 官方无关，仅供学习与交流使用。
 
-2. 添加1个`repository secret`，命名为`GLADOS_COOKIES`，其值对应GLaDOS账号的cookie值中的有效部分（获取方式如下）
+## 🚀快速开始
 
-- 在GLaDOS的签到页面按`F12`
+> [!TIP]
+> **还没有 GLaDOS 账号？**
+>
+> 用[**邀请链接注册**](https://glados.space/landing/0A58E-NV28S-6U3QV-33VMG) 享 9 折优惠，邀请码 [`0A58E-NV28S-6U3QV-33VMG`](https://0a58e-nv28s-6u3qv-33vmg.glados.space) · 优惠码 [`DEVILSTORE`](https://0a58e-nv28s-6u3qv-33vmg.glados.space)
 
-- 切换到`Network`页面下，刷新
+1. Fork 本仓库。
+2. 在自己的仓库进入 `Settings` → `Secrets and variables` → `Actions` → `New repository secret`，至少添加 `GLADOS_COOKIES`。
+3. 打开 `Actions` → `GLaDOS Check-in` → `Run workflow` 手动跑一次，看到「签到成功」或「重复签到」即完成。
+4. 之后每天 **09:18 / 12:18**（北京时间）自动运行。
 
-![图片加载失败](imgs/2.png)
+| Secret | 必填 | 说明 |
+| --- | :---: | --- |
+| `GLADOS_COOKIES` | **是** | 账号列表，固定 JSON 数组，见[账号配置](#配置-glados_cookies) |
+| `HERMES_WEBHOOK_SECRET` | 否 | Hermes 微信通知；需同时配置 `HERMES_WEBHOOK_SSH_KEY` |
+| `HERMES_WEBHOOK_SSH_KEY` | 否 | Hermes SSH 私钥，仅保存在 GitHub Secret |
+| `GLADOS_EXCHANGE_PLAN` | 否 | `plan100` / `plan200` / `plan500`，见[积分兑换](#积分兑换) |
+| `GLADOS_VERBOSE` | 否 | `true` / `1` / `yes` 输出详细日志 |
 
-- 点击第一个选项卡后在`Request Headers`下找到`Cookie`，右键复制cookie的值即可
+## 🔧配置 GLADOS_COOKIES
 
-  > 参考格式：koa:sess=eyJ1c2xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxAwMH0=; koa:sess.sig=xJkOxxxxxxxxxxxxxxxtnM;
+必须是 **JSON 数组**，每个账号一个对象，只允许下面四个字段：
 
-![图片加载失败](imgs/3.png)
-
-- 多账号请在 `COOKIES` 中 添加多个 `cookies` 中间使用 `&`连接即可。（例如： `c1&c3&c3...`）
-
-3. 配置积分兑换策略（非必须）
-
-- 添加1个`repository secret`，命名为`GLADOS_EXCHANGE_PLAN`，配置自动兑换积分策略：
-
-| 值 | 积分要求 | 兑换天数 |
-|---|---------|---------|
-| `plan100` | 100 积分 | 10 天 |
-| `plan200` | 200 积分 | 30 天 |
-| `plan500` | 500 积分 | 100 天 |
-
-> 不配置时默认不进行自动兑换；如需兑换，设置 `GLADOS_EXCHANGE_PLAN` 为 `plan100` / `plan200` / `plan500`。
-
-4. 手机推送（非必须）
-
-- 在 [PushPlus 官网](https://www.pushplus.plus/) 获取自己的 Token，并按网站提示绑定通知接收渠道。
-- 添加1个 `repository secret`，命名为 `PUSHPLUS_TOKEN`，值填入 PushPlus Token。Token 只需在 GitHub Secrets 中保存，不要写入代码或日志。
-- 配置后，短信仅汇总能返回有效剩余天数和总积分的记录，保留原有标题及明细格式；有有效账号数据但签到失败的记录仍会通知。全部记录无有效数据或未配置 Cookie 时，发送“Cookie 可能已失效”提醒。完整签到日志仍保留所有域名结果；未配置推送 Token 时跳过通知。迁移后不再使用 `PUSHDEER_SENDKEY`。
-- 短信中的兑换积分不足提示会简写为“积分不足（10/500），暂未兑换”；原有字段顺序、兑换逻辑和日志中的服务端原始结果保持不变。其他兑换结果仍按原样通知。
-- GitHub Actions 默认使用 `cmcc`（中国移动新消息ClawBot）渠道，发送纯文本汇总。请先在 PushPlus 官网的“个人中心 → 渠道配置 → 新消息ClawBot”中完成 Channel API Key 绑定，并发送测试消息确认能收到。Channel API Key 保存在 PushPlus，GitHub 的 `PUSHPLUS_TOKEN` 仍填 PushPlus Token。
-- 如需其他渠道，可在仓库 `Settings → Secrets and variables → Actions → Variables` 中添加 `PUSHPLUS_CHANNEL`（例如 `wechat`、`app`、`webhook`、`mail`）。对应渠道需要配置编码时，再添加 `PUSHPLUS_OPTION`，填写 PushPlus 中的渠道编码；`cmcc` 不需要该参数。
-- 本地运行未设置 `PUSHPLUS_CHANNEL` 时，使用 PushPlus 账户中配置的默认渠道。消息发送是异步的，接口接受请求不表示已经送达；日志会记录消息流水号，可在 PushPlus 查询最终发送结果。详见 [cmcc 官方教程](https://github.com/pushplus/pushplus/blob/main/channel/cmcc.md)。
-- 在 Actions 中手动运行 `auto check`，日志出现“PushPlus 推送请求已提交”表示接口已接受请求；实际送达请在接收渠道或 PushPlus 后台确认。
-
-### **star**自己的仓库
-
-![图片加载失败](imgs/4.png)
-
-## 文件结构
-
-```shell
-│  checkin.py	# 签到脚本
-│
-├─.github
-│  └─workflows
-│          gladosCheck.yml	# Actions 配置文件
+```json
+[
+  {
+    "name": "大号",
+    "origin": "glados.cloud",
+    "cookie": "koa:sess=...; koa:sess.sig=...; gld:sess=...",
+    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) ... Safari/537.36"
+  },
+  {
+    "name": "小号",
+    "origin": "railgun.info",
+    "cookie": "koa:sess=...; koa:sess.sig=..."
+  },
+  {
+    "name": "账号3",
+    "cookie": "gld:sess=..."
+  }
+]
 ```
 
-## 更新日志
+| 字段 | 必填 | 说明 |
+| --- | :---: | --- |
+| `cookie` | **是** | 完整 Cookie；新版建议同时包含 `gld:sess` 与 `gld:sess.sig` |
+| `name` | 否 | 备注名，不填显示 `账号1` |
+| `origin` | 否 | Cookie 所属域名，不填自动探测 |
+| `user-agent` | 否 | 提取 Cookie 时的浏览器 UA，建议填写 |
 
-- **2026-01**: 重构代码，添加log输出方便定位，支持新版网址，支持配置积分兑换策略。
-- **2026-04**: 优化代码逻辑，优化日志输出，支持[新版域名](https://railgun.info) ，在 GLADOS_COOKIES 中添加新版域名下的 cookies 即可使用。
-- **2026-09**: 新增设备平台自适应重试（code 4 无需手动配置 UA 即可自动恢复）；默认关闭自动兑换，需显式配置 `GLADOS_EXCHANGE_PLAN` 才启用。
-- **2026-09**: 新增网络层重试/退避：`requests.Session` 挂载 `HTTPAdapter` + `urllib3.Retry`（total=3、指数退避 1/2/4s、对 429/5xx 自动重试），降低 CI 网络抖动导致的误报失败；业务 200 响应不受影响。
+**要点**
 
+- 字段名固定，出现其他字段直接报错。
+- 重复 Cookie 自动去重，不会重复签到。
+- 旧 `&` 分隔仍兼容但会提示迁移；换行分隔、字符串数组、单个对象已不支持。
+- 如果只新增账号而不改旧 Cookie，可直接在原值末尾追加 `&新Cookie`；旧 Cookie 文本会原样保留。
 
-## 问题排查与定位
-- 主程序捕获到未预期异常时，会先尝试推送错误通知，再以退出码 `1` 结束，使 GitHub Actions 显示失败。Cookie 无权限、签到失败或推送接口拒绝等已处理结果仍沿用原有退出行为。
-- 本仓库默认使用 macOS 平台的 User-Agent，与当前两个账号的登录设备一致，避免首次请求使用 Windows 标识触发设备不匹配。若以后改用其他平台登录并更新 Cookie，需相应调整默认平台；原有设备自适应重试仍保留。
-- 大家可以通过查询 actions 中的 running checkin 日志快速定位问题，有其他问题提交issue。
-- 若日志出现 `code : 4, message : Automated check-in detected`：这是 GLaDOS 的**设备平台校验**（`reason=device-mismatch`，即签到请求 UA 平台与登录设备平台不一致）。脚本已内置**设备平台自适应**：首次失败时自动读取服务端返回的 `loginDevice` 并切换对应平台 UA 重试，**无需手动配置 User-Agent**；若长期仍失败，请重新登录 glados.cloud 手动签到一次并刷新 cookie。
+**如何获取**
 
-  <img width="1684" height="844" alt="image" src="https://github.com/user-attachments/assets/45348a5f-43e4-45f5-8fdf-ce84d343b30d" />
+签到页按 `F12` → `Network` → 刷新 → 选中任一请求 → `Request Headers`，复制 `Cookie` 与 `User-Agent` 的完整值。
 
-## 声明
+**探测顺序**（不填 `origin` 时按此顺序，命中即停）
 
-本项目不保证稳定运行与更新, 因GitHub相关规定可能会删库, 请注意备份
+`glados.cloud` → `railgun.info` → `glados.network` → `glados.rocks` → `glados.one` → `glados.space` → `glados.vip` → `glados-facility.com`
 
+探测用短超时快速筛一遍；只对**网络无响应**的域名再试一次，返回「没有权限」的不重试。
 
+## 🎁积分兑换
 
+设置 `GLADOS_EXCHANGE_PLAN` 后才执行，且只在签到**成功 / 重复**时兑换。
 
+| 档位 | 消耗积分 | 获得天数 |
+| --- | :---: | :---: |
+| `plan100` | 100 | 10 天 |
+| `plan200` | 200 | 30 天 |
+| `plan500` | 500 | 100 天 |
 
+不填或填非法值则不兑换；余额不足时接口返回失败，不会扣成负数。
 
+## 📣消息推送
 
+| 后端 | Secret | 说明 |
+| --- | --- | --- |
+| Hermes | `HERMES_WEBHOOK_SECRET` + `HERMES_WEBHOOK_SSH_KEY` | 通过受限 SSH 转发发送微信通知；两个 Secret 都配置时发送 |
+
+配置 Hermes 时，Actions 会等待 Hermes 确认送达；确认失败会让该次 Actions 变红。未配置 Hermes 时不发送通知，但签到仍会执行。
+
+### 推送效果
+
+```text
+GLaDOS 签到, 成功1, 失败0, 重复1
+#1 P:20 剩余:48 天 总积分:409 积分 | 签到成功 | 未配置兑换计划，跳过自动兑换
+#2 P:0 剩余:23 天 总积分:528 积分 | 重复签到 | 未配置兑换计划，跳过自动兑换
+```
+
+通知只包含同时取得剩余天数和总积分的账号；完整账号结果仍保留在 Actions 日志中。
+
+| 标记 | 含义 |
+| --- | --- |
+| `✅ 签到成功` | 本次签到成功，`获得 N 积分` 为本次所得 |
+| `🔄 重复签到` | 今天已签过，正常结果，不算失败 |
+| `🔴 签到失败` | 未能签到，见[问题排查](#问题排查) |
+
+账号名列只在**多账号**时出现。
+
+## ⏰修改运行时间
+
+默认每天 **09:18 / 12:18**（北京时间），由 `.github/workflows/gladosCheck.yml` 的 `schedule` 控制：
+
+```yaml
+schedule:
+  - cron: '18 9,12 * * *'
+    timezone: 'Asia/Shanghai'
+```
+
+改 `cron` 即可调整时间；`timezone` 让 GitHub 按北京时间解释。例如只保留早上一次：
+
+```yaml
+schedule:
+  - cron: '18 9 * * *'
+    timezone: 'Asia/Shanghai'
+```
+
+## 🔍问题排查
+
+**正常日志**
+
+| 日志片段 | 说明 |
+| --- | --- |
+| `✅ 命中登录域名（剩余 N 天）` | 探测成功，后续只在该域名签到 |
+| `✅ 重试后命中登录域名（剩余 N 天）` | 该域名首次无响应，重试后成功 |
+| `[REDACTED]` | 脱敏标记，凭证已被替换 |
+
+**异常日志**
+
+| 日志片段 | 原因与处理 |
+| --- | --- |
+| `候选域名均返回「没有权限」` | Cookie 失效，或账号不在候选域名内 → 重新登录并更新 Cookie |
+| `候选域名均未获得服务端响应` | 网络/服务端故障，非 Cookie 问题 → 稍后重跑 |
+| `设备平台不匹配(loginDevice=…)` | UA 与登录设备不一致 → 补充 `user-agent` 字段 |
+| `签到被拒：please checkin via …` | token 与域名不符（多为服务端规则变更）→ 确认 Cookie 来源域名 |
+| `无权限(code=-2)` | 该 Cookie 失效或账号风控 |
+| `Automated check-in detected` / 只给 1 积分 | GLaDOS 判定为自动签到；脚本已适配 challenge，但 TLS/HTTP 指纹、IP、设备等仍可能被识别 → 手动签到或使用官方客户端 |
+| `运行超出预算` | 单轮超时，剩余账号被跳过 → 下轮或手动重跑 |
+| `积分请求失败 / 响应解析失败 / 格式异常 / 字段无法解析` | 查总积分失败 → 推送里显示 `总 None 积分`，**不影响签到结果**，可忽略 |
+
+> 推送里出现 `总 None 积分` 只表示本次没取到总积分（该接口偶发较慢），与签到成功与否无关；想确认可手动重跑一次。
+
+## ❓常见问题（FAQ）
+
+<details>
+<summary><strong>Q：一次运行多久？</strong></summary>
+
+正常几秒到几十秒。单轮预算 300 秒（约 5 分钟），超出会跳过剩余账号。
+
+</details>
+
+<details>
+<summary><strong>Q：Cookie 多久会过期？</strong></summary>
+
+没有固定期限。退出登录、改密码、服务端会话策略调整都可能让它提前失效。出现「候选域名均返回没有权限」或 `code=-2` 时，重新登录并更新 `GLADOS_COOKIES` 即可。
+
+</details>
+
+<details>
+<summary><strong>Q：支持多个账号吗？</strong></summary>
+
+支持，数量不限，在 JSON 数组里多写几项即可。重复的 Cookie 会自动去重，不会重复签到。
+
+</details>
+
+<details>
+<summary><strong>Q：需要标注每条 Cookie 属于哪个域名吗？</strong></summary>
+
+不需要，脚本会自动探测。填 `origin` 的好处是少发几个探测请求、日志更清楚。注意**各站 Cookie 通常不互通**，每条 Cookie 必须来自它真正登录的站点。
+
+</details>
+
+<details>
+<summary><strong>Q：填错 <code>origin</code> 会怎样？</strong></summary>
+
+不会失败。`origin` 只是**优先尝试**：命中就直接签到，返回「没有权限」则自动回退遍历全部 8 个内置域名。
+
+</details>
+
+<details>
+<summary><strong>Q：多账号时怎么区分日志是哪个账号？</strong></summary>
+
+不填 `name` 时按顺序自动命名，显示 `🍪[账号1]`、`🍪[账号2]`；填了则显示 `🍪[1:大号]`、`🍪[2:小号]`、`🍪[3:账号3]`，序号与总结里的 `#1` `#2` `#3` 对应。
+
+</details>
+
+<details>
+<summary><strong>Q：一个账号会跑几个任务？</strong></summary>
+
+一个。脚本先探测域名、再只在该域名签到，任务数等于账号数。
+
+</details>
+
+<details>
+<summary><strong>Q：「重复签到」算成功还是失败？</strong></summary>
+
+算正常结果。表示当天已签过，服务端返回 `code=1`，总结里单独计数为「重复」，不计入失败。
+
+</details>
+
+<details>
+<summary><strong>Q：遇到设备不匹配（code=4）怎么办？</strong></summary>
+
+GLaDOS 会校验 UA 与登录设备。填了 `user-agent` 就原样使用；没填则用默认 UA，失败时按 `loginDevice` 自动重试一次；仍失败会提示补充 `user-agent` —— 填入**提取 Cookie 时那个浏览器**的 UA 即可。
+
+</details>
+
+<details>
+<summary><strong>Q：Actions 是绿色的，但没收到通知？</strong></summary>
+
+先确认对应 Secret 拼写正确。Hermes 日志出现 `Hermes confirmed WeChat notification delivery.` 才表示 Hermes 已确认送达。
+
+</details>
+
+<details>
+<summary><strong>Q：公开仓库的定时任务会自己停掉吗？</strong></summary>
+
+会。GitHub 对公开仓库有「连续 60 天无活动则停用 schedule」的规则。本仓库内置 keepalive 步骤定期产生活动，但并非 100% 保证；发现停跑去 Actions 页面重新启用即可。
+
+</details>
+
+<details>
+<summary><strong>Q：配置了兑换会不会把积分乱花掉？</strong></summary>
+
+按 `GLADOS_EXCHANGE_PLAN` 指定档位执行，**不填就不兑换**，且只在签到成功/重复时才兑换。余额不足时接口返回失败，不会扣成负数。
+
+</details>
+
+<details>
+<summary><strong>Q：签到失败会让 Actions 变红吗？</strong></summary>
+
+分两种情况：**配置错误**（未填 Cookie、JSON 格式非法）会以非 0 退出码结束，工作流变红；**业务失败**（Cookie 失效 `code=-2`、服务端 5xx）不会变红，避免偶发失败天天误报。因此业务失败需要自己关注推送或日志。
+
+</details>
+
+<details>
+<summary><strong>Q：「剩余 0 天」是怎么回事？</strong></summary>
+
+账号当天到期，签到本身仍会成功。建议配置 `GLADOS_EXCHANGE_PLAN` 用积分续期，详见[积分兑换](#积分兑换)。
+
+</details>
+
+<details>
+<summary><strong>Q：可以本地运行吗？</strong></summary>
+
+可以，用于调试。安装依赖后设置环境变量再执行：
+
+```bash
+pip install -r requirements.txt
+export GLADOS_COOKIES='[{"cookie":"koa:sess=..."}]'
+python checkin.py
+```
+
+Windows PowerShell 用 `$env:GLADOS_COOKIES='[...]'`。
+
+</details>
+
+---
+
+## 📁文件结构
+
+```text
+.
+├── checkin.py                    # 主程序：账号模型 / API / 配置 / 报告 / 推送
+├── logging_config.py             # 日志配置（北京时间、级别短标签、脱敏）
+├── requirements.txt              # 依赖
+├── README.md                     # 说明文档
+├── LICENSE                       # GPL-3.0 许可
+└── .github/workflows/
+    └── gladosCheck.yml           # Actions 定时任务
+```
+
+## 📝更新日志
+
+**2026-01**
+
+- 重构代码，添加日志输出方便定位，支持新版网址，支持配置积分兑换策略。
+
+**2026-04**
+
+- 优化代码逻辑与日志输出。
+
+**2026-09**
+
+- 设备平台自适应重试，无需手动配置 UA。
+- 网络层自动重试与退避。
+- 日志时间统一为北京时间；定时任务调整为每天 2 次。
+- 默认关闭自动兑换。
+
+**2026-10**
+
+- 通知链统一使用 Hermes webhook，并要求确认送达。
+
+**2026-11**
+
+- GLADOS_COOKIES 格式改为 JSON 数组，支持 `name` / `origin` / `cookie` / `user-agent`；旧 `&` 格式仍兼容。
+- 优化失败原因提示；签到被拒、兑换未完成等场景给出可执行建议。
+- 日志自动脱敏：`koa:*` / `gld:*` / Bearer → `[REDACTED]`。
+- 加入 challenge 校验机制；获取失败时回退旧协议。
+
+## ⭐Star 趋势
+
+[![Star History Chart](https://api.star-history.com/svg?repos=Innsly5232/Glados-Railgun-checkin&type=Date&legend=top-left)](https://star-history.com/#Innsly5232/Glados-Railgun-checkin&type=Date)
+
+---
+
+## 📄声明
+
+- 不保证稳定运行，接口与风控策略可能随时调整。
+- 只调用网页端使用的公开 API，不破解验证码；服务端风控仍可能拒绝或降权。
+- 使用风险自负；因使用本工具导致的账号风控、限权或封禁由使用者自行承担。
+- 本项目以 [GPL-3.0](LICENSE) 发布。
+
+如果这个项目对你有帮助，欢迎点个 ⭐ Star。
