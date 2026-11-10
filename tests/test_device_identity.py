@@ -9,6 +9,14 @@ import checkin
 
 
 class DeviceIdentityTests(unittest.TestCase):
+    def test_default_user_agent_is_macos(self):
+        api = checkin.API("glados.cloud", "koa:sess=test")
+        try:
+            self.assertEqual(api.headers["user-agent"], checkin.PLATFORM_UA["macOS"])
+            self.assertEqual(api._no_retry_session.headers["user-agent"], checkin.PLATFORM_UA["macOS"])
+        finally:
+            api.close()
+
     def test_custom_user_agent_is_used_for_status_challenge_checkin_and_points(self):
         calls = []
         user_agent = checkin.PLATFORM_UA["macOS"]

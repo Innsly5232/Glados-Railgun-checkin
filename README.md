@@ -69,7 +69,7 @@
 | `cookie` | **是** | 完整 Cookie；新版建议同时包含 `gld:sess` 与 `gld:sess.sig` |
 | `name` | 否 | 备注名，不填显示 `账号1` |
 | `origin` | 否 | Cookie 所属域名，不填自动探测 |
-| `user-agent` | 否 | 提取 Cookie 时的浏览器 UA，建议填写 |
+| `user-agent` | 否 | 提取 Cookie 时的浏览器 UA；不填时默认使用 macOS，建议填写真实值 |
 
 **要点**
 

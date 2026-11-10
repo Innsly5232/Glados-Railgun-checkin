@@ -739,7 +739,9 @@ class API:
                 raise_on_status=False,
             )
 
-        self.headers = {"origin": f"https://{domain}", "user-agent": self.user_agent or PLATFORM_UA["Windows"]}
+        # GLaDOS 账号默认按 macOS 登录设备运行；设备不匹配时，checkin()
+        # 仍会依据服务端返回的 loginDevice 自动切换一次。
+        self.headers = {"origin": f"https://{domain}", "user-agent": self.user_agent or PLATFORM_UA["macOS"]}
         self.session = requests.Session()
         self.session.headers.update(self.headers)
         adapter = HTTPAdapter(max_retries=retry)
