@@ -2,6 +2,14 @@ name: GLaDOS Check-in
 
 on:
   workflow_dispatch:
+    inputs:
+      runner:
+        description: 'Cloud environment for compatibility testing'
+        type: choice
+        default: ubuntu-latest
+        options:
+          - ubuntu-latest
+          - macos-latest
   push:
     branches: [ master ]
     paths-ignore:
@@ -19,7 +27,7 @@ concurrency:
 jobs:
   build:
     name: glados/railgun checkin
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
 
     # 脚本自带 5 分钟运行预算；这里再兜底，避免异常情况卡住
     timeout-minutes: 15
@@ -51,8 +59,10 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         python -m playwright install --with-deps chromium
-        sudo apt-get update
-        sudo apt-get install -y xvfb
+        if [ "$RUNNER_OS" = "Linux" ]; then
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+        fi
 
     - name: Run regression tests
       run: python -m unittest discover -s tests -q
@@ -60,7 +70,11 @@ jobs:
     # 执行 签到脚本
     - name: Running checkin
       run: |
-        xvfb-run -a python checkin.py
+        if [ "$RUNNER_OS" = "Linux" ]; then
+          xvfb-run -a python checkin.py
+        else
+          python checkin.py
+        fi
       env:
         # 云端 Chromium 运行官网流程，不依赖个人电脑。
         GLADOS_CHECKIN_MODE: browser
