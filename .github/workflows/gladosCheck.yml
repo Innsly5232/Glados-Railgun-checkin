@@ -56,6 +56,8 @@ jobs:
       run: |
         python checkin.py
       env:
+        # 恢复更新前的 token 表单签到；积分及接受结果以服务端返回为准。
+        GLADOS_CHECKIN_MODE: legacy
         HERMES_WEBHOOK_SECRET: ${{ secrets.HERMES_WEBHOOK_SECRET }}
         HERMES_WEBHOOK_SSH_KEY: ${{ secrets.HERMES_WEBHOOK_SSH_KEY }}
         GLADOS_COOKIES: ${{ secrets.GLADOS_COOKIES }}

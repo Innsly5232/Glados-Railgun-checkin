@@ -39,7 +39,8 @@ class DeviceIdentityTests(unittest.TestCase):
             return response
 
         cookies = json.dumps([{"name": "大号", "cookie": "koa:sess=test", "user-agent": user_agent}])
-        with patch.dict(os.environ, {"GLADOS_COOKIES": cookies}, clear=True), \
+        with patch.dict(os.environ, {"GLADOS_COOKIES": cookies,
+                                    "GLADOS_CHECKIN_MODE": "challenge"}, clear=True), \
                 patch.object(requests.Session, "send", send), \
                 patch("checkin.time.sleep"):
             config = checkin.Config()
@@ -78,7 +79,8 @@ class DeviceIdentityTests(unittest.TestCase):
             response.headers["Content-Type"] = "application/json"
             return response
 
-        with patch.dict(os.environ, {"GLADOS_COOKIES": "koa:sess=test"}, clear=True), \
+        with patch.dict(os.environ, {"GLADOS_COOKIES": "koa:sess=test",
+                                    "GLADOS_CHECKIN_MODE": "challenge"}, clear=True), \
                 patch.object(requests.Session, "send", send), \
                 patch("checkin.time.sleep"):
             report = checkin.CheckinRunner(checkin.Config()).run()

@@ -271,10 +271,18 @@ class CheckinResult:
     exchange: str = ""  # 仅在真正执行兑换时才有值，不含「未配置」这类配置状态
     note: str = ""  # 附加提示（如剩余天数偏少）
     code: CheckinStatus = CheckinStatus.FAILURE
+    failure_reason: str = ""  # 固定诊断文案，不把服务端任意内容带入通知
 
     @classmethod
     def failure(cls, domain: str = UNPROBED) -> "CheckinResult":
         return cls(domain=domain)
+
+
+@dataclass(frozen=True)
+class CheckinChallenge:
+    nonce: str
+    proof: str = ""
+    requires_verification: bool = False
 
 
 @dataclass()
@@ -352,7 +360,8 @@ class CookieEntry:
             self._log_result()
             return self.result
 
-        with API(domain, self.cookie, label=self.label, verbose=config.verbose, user_agent=self.user_agent) as api:
+        with API(domain, self.cookie, label=self.label, verbose=config.verbose,
+                 user_agent=self.user_agent, checkin_mode=config.checkin_mode) as api:
             self.result = self._sign_in(api, domain, days, config)
 
         self._log_result()
@@ -646,7 +655,9 @@ def earned_points(raw: Dict) -> int:
 
 def log_reject(code: int, raw: Dict, message: str, domain: str, log: Callable[..., None], ua_hint: str = "") -> None:
     """失败分支按 code 细分诊断，便于快速定位根因"""
-    if code == 4:
+    if raw.get("reason") == "turnstile":
+        log(LogEmoji.ERROR, "官网要求完成人机验证，请在官网签到页处理后再核对结果", True)
+    elif code == 4:
         device = raw.get("loginDevice") or "未知"
         if raw.get("reason") == "device-mismatch":
             if device in PLATFORM_UA:
@@ -671,8 +682,15 @@ def parse_checkin(raw: Optional[Dict], domain: str, log: Callable[..., None], ua
     """把签到响应解析为 CheckinResult（只填 domain/points/code）；log 只用于诊断。"""
     result = CheckinResult(domain=domain)
     if not isinstance(raw, dict):
+        result.failure_reason = "未取得有效签到响应，请查看 Actions 中的请求错误"
         if raw is not None:
             log(LogEmoji.ERROR, f"签到响应格式异常（{type(raw).__name__}）", True)
+        return result
+
+    # 本地检测到 challenge 需要官网验证：未向签到接口提交请求。
+    if raw.get("client_error") == "human-verification-required":
+        result.failure_reason = "需要在官网完成人机验证，本次未提交签到"
+        log(LogEmoji.ERROR, result.failure_reason, True)
         return result
 
     code = raw.get("code", -2)
@@ -682,6 +700,7 @@ def parse_checkin(raw: Optional[Dict], domain: str, log: Callable[..., None], ua
     # token 与域名不一致时服务端返回 "please checkin via https://..."，此响应 code 可能为 0，
     # 必须优先拦截，否则会被误判为签到成功。
     if "please checkin via" in message.lower():
+        result.failure_reason = "签到域名不匹配，请核对账号 origin"
         log(LogEmoji.ERROR, f"签到被拒：{message}（服务端认定签到域名不符）", True)
         return result
 
@@ -693,6 +712,15 @@ def parse_checkin(raw: Optional[Dict], domain: str, log: Callable[..., None], ua
         log(LogEmoji.REPEAT, f"{{ code : {code}, message : {message} }}", True)
         result.code = CheckinStatus.REPEAT
     else:
+        if raw.get("reason") == "turnstile":
+            result.failure_reason = "需要在官网完成人机验证，请在签到页处理后核对结果"
+        elif code == 4 and raw.get("reason") == "device-mismatch":
+            result.failure_reason = "登录设备不匹配，请将 user-agent 设为登录浏览器的完整 User-Agent"
+        elif code == -2:
+            result.failure_reason = "无权限，请在官网核对登录状态及账号 Cookie"
+        else:
+            safe_code = str(code) if isinstance(code, int) and not isinstance(code, bool) else "未知"
+            result.failure_reason = f"签到被拒(code={safe_code})，请查看 Actions 错误日志"
         log_reject(code, raw, message, domain, log, ua_hint)
     return result
 
@@ -717,6 +745,7 @@ class API:
         verbose: bool = False,
         probing: bool = False,
         user_agent: str = "",
+        checkin_mode: str = "legacy",
     ):
         self.domain = domain
         self.cookie = cookie
@@ -724,6 +753,9 @@ class API:
         self.verbose = verbose
         self.probing = probing
         self.user_agent = (user_agent or "").strip()
+        if checkin_mode not in ("legacy", "challenge"):
+            raise ValueError("checkin_mode 只支持 legacy / challenge")
+        self.checkin_mode = checkin_mode
 
         if probing:
             self.timeout: Tuple[int, int] = (5, 10)
@@ -925,8 +957,8 @@ class API:
         snippet = "（HTML 响应，已省略）" if is_html else body[:300] + ("..." if len(body) > 300 else "")
         self.log(LogEmoji.WARNING, f"向 {url} 请求失败，状态码 {status}。响应: {snippet}", force=True)
 
-    def _checkin_challenge(self, user_agent: str) -> Optional[Tuple[str, str]]:
-        """获取签到 challenge 并计算 proof；失败返回 None，由调用方回退旧协议。"""
+    def _checkin_challenge(self, user_agent: str) -> Optional[CheckinChallenge]:
+        """读取 challenge；需官网验证时标记，旧站点不支持时返回 None。"""
         response = self.request("GET", APIEndpoint.CHECKIN_CHALLENGE, user_agent=user_agent)
         if response is None:
             return None
@@ -939,6 +971,11 @@ class API:
             self.log(LogEmoji.WARNING, f"签到 challenge 响应异常: {data}", force=True)
             return None
 
+        # 官网在 challenge 中声明 Turnstile 时，需要用户在官网完成验证。
+        # 不忽略验证要求，也不回退旧协议再次提交。
+        if data.get("turnstile"):
+            return CheckinChallenge(nonce="", requires_verification=True)
+
         nonce = data.get("nonce")
         if not nonce:
             self.log(LogEmoji.WARNING, "签到 challenge 缺少 nonce，按旧协议提交", force=True)
@@ -948,16 +985,19 @@ class API:
         time.sleep(CHALLENGE_DELAY_SECONDS)
         proof = hashlib.sha256(f"{nonce}.{CHALLENGE_SUFFIX}".encode()).hexdigest()
         self.log(LogEmoji.INFO, "已获取签到 challenge")
-        return str(nonce), proof
+        return CheckinChallenge(nonce=str(nonce), proof=proof)
 
     def _checkin_attempt(self, user_agent: str) -> Optional[Dict]:
         """发起一次签到请求并返回解析后的响应体；请求失败或响应非 JSON 返回 None"""
         payload: Dict[str, str] = {"token": self.domain}
-        challenge = self._checkin_challenge(user_agent)
+        # legacy 与更新前保持一致：直接发送 token 表单，由服务端决定是否接受。
+        # 不在服务端已拒绝验证后更换协议重试。
+        challenge = self._checkin_challenge(user_agent) if self.checkin_mode == "challenge" else None
         if challenge:
-            nonce, proof = challenge
-            payload.update({"nonce": nonce, "proof": proof})
-        else:
+            if challenge.requires_verification:
+                return {"client_error": "human-verification-required"}
+            payload.update({"nonce": challenge.nonce, "proof": challenge.proof, "tsState": "off"})
+        elif self.checkin_mode == "challenge":
             self.log(
                 LogEmoji.WARNING,
                 "未取得签到 challenge，按旧协议提交（可能只获得 1 积分）",
@@ -992,9 +1032,11 @@ class Config:
     ENV_COOKIES = "GLADOS_COOKIES"
     ENV_EXCHANGE_PLAN = "GLADOS_EXCHANGE_PLAN"
     ENV_VERBOSE = "GLADOS_VERBOSE"
+    ENV_CHECKIN_MODE = "GLADOS_CHECKIN_MODE"
 
     DEFAULT_EXCHANGE_PLAN = "none"
     DEFAULT_VERBOSE = False
+    DEFAULT_CHECKIN_MODE = "legacy"
 
     def __init__(self, env: Optional[Dict[str, str]] = None):
         self.env = env if env is not None else os.environ
@@ -1002,6 +1044,7 @@ class Config:
         self.accounts = Accounts()
         self.exchange_plan = self.DEFAULT_EXCHANGE_PLAN
         self.verbose = self.DEFAULT_VERBOSE
+        self.checkin_mode = self.DEFAULT_CHECKIN_MODE
         self.load_error = ""
         self._load()
 
@@ -1021,6 +1064,10 @@ class Config:
         self._load_verbose()
         self._load_accounts()
         self._load_exchange_plan()
+        mode = self._get(self.ENV_CHECKIN_MODE) or self.DEFAULT_CHECKIN_MODE
+        if mode not in ("legacy", "challenge"):
+            raise ValueError("GLADOS_CHECKIN_MODE 只支持 legacy / challenge")
+        self.checkin_mode = mode
 
         logger.info(f"{LogEmoji.INFO} 共加载了 {len(self.accounts)} 个账号用于签到。")
         for account in self.accounts:
@@ -1031,6 +1078,7 @@ class Config:
         )
         logger.info(f"{LogEmoji.INFO} 当前 {self.ENV_EXCHANGE_PLAN}: {self.exchange_plan}。")
         logger.info(f"{LogEmoji.INFO} 当前 {self.ENV_VERBOSE}: {self.verbose}。")
+        logger.info(f"{LogEmoji.INFO} 当前 {self.ENV_CHECKIN_MODE}: {self.checkin_mode}。")
 
     def _get(self, key: str) -> str:
         return (self.env.get(key) or "").strip()
@@ -1116,6 +1164,8 @@ class Report:
                 f"#{entry.index}  {name_cell}{emoji} {status}  {r.domain}  "
                 f"获得 {r.points} 积分 · 剩余 {format_days(r.days)} · 总 {format_points(r.points_total)}"
             )
+            if r.failure_reason:
+                line += f" · 原因：{r.failure_reason}"
             if r.exchange:
                 line += f" · {r.exchange}"
             if r.note:
@@ -1125,6 +1175,19 @@ class Report:
         if self.error:
             lines.append(self.error)
         return line_sep.join(lines)
+
+    def emit_actions_annotations(self) -> None:
+        """为只读 API 提供结果；不包含账号名、Cookie 或服务端任意正文。"""
+        if os.environ.get("GITHUB_ACTIONS") != "true":
+            return
+        for entry in self.entries:
+            result = entry.result
+            status = STATUS_META.get(result.code, (LogEmoji.ERROR, "签到失败"))[1]
+            message = f"{result.domain} | {status} | 本次积分={result.points}"
+            if result.failure_reason:
+                message += f" | {result.failure_reason}"
+            message = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+            print(f"::notice title=GLaDOS result {entry.index}::{message}")
 
 
 class PushService:
@@ -1158,7 +1221,7 @@ class PushService:
 
     @classmethod
     def _notification(cls, report: Report) -> Tuple[str, str]:
-        """过滤没有状态/积分数据的条目，避免把网络失败误报成有效账号结果。"""
+        """保留有效账号及已知失败诊断，避免把人机验证误报为 Cookie 失效。"""
         if report.error:
             if not report.entries and ("未设置" in report.error or "未找到有效 Cookie" in report.error):
                 return cls.COOKIE_ALERT_TITLE, cls.COOKIE_ALERT_CONTENT
@@ -1166,7 +1229,8 @@ class PushService:
 
         valid = [
             entry for entry in report.entries
-            if entry.result.days is not None and entry.result.points_total is not None
+            if (entry.result.days is not None and entry.result.points_total is not None)
+            or entry.result.failure_reason
         ]
         if not valid:
             return cls.COOKIE_ALERT_TITLE, cls.COOKIE_ALERT_CONTENT
@@ -1183,6 +1247,7 @@ class PushService:
             lines.append(
                 f"#{entry.index} P:{result.points} 剩余:{format_days(result.days)} "
                 f"总积分:{format_points(result.points_total)} | {status} | {exchange}"
+                + (f" | 原因：{result.failure_reason}" if result.failure_reason else "")
             )
         return title, "\n".join(lines)
 
@@ -1272,6 +1337,8 @@ def main() -> None:
         # 保留已完成账号的结果，避免一个异常吞掉全部进度
         report = Report(config.accounts, error=str(e)) if config is not None and config.accounts else Report.failed(str(e))
         exit_code = 1
+
+    report.emit_actions_annotations()
 
     # 推送放在 try 之外：即使配置解析失败，也要尽力把错误通知出去
     logger.info(f"{LogEmoji.START} 步骤 4: 发送推送")
