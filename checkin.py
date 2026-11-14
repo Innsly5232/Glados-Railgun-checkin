@@ -745,7 +745,7 @@ class API:
         verbose: bool = False,
         probing: bool = False,
         user_agent: str = "",
-        checkin_mode: str = "legacy",
+        checkin_mode: str = "challenge",
     ):
         self.domain = domain
         self.cookie = cookie
@@ -1036,7 +1036,7 @@ class Config:
 
     DEFAULT_EXCHANGE_PLAN = "none"
     DEFAULT_VERBOSE = False
-    DEFAULT_CHECKIN_MODE = "legacy"
+    DEFAULT_CHECKIN_MODE = "challenge"
 
     def __init__(self, env: Optional[Dict[str, str]] = None):
         self.env = env if env is not None else os.environ

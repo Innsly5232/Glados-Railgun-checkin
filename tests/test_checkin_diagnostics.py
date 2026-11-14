@@ -108,10 +108,10 @@ class CheckinDiagnosticsTests(unittest.TestCase):
         self.assertEqual(request.body, 'token=railgun.info')
         self.assertEqual(request.headers['Content-Type'], 'application/x-www-form-urlencoded')
 
-    def test_default_mode_restores_original_form_checkin(self):
+    def test_explicit_legacy_mode_uses_original_form_checkin(self):
         report, calls = self.run_account(
             {'code': 0, 'nonce': 'unused-nonce', 'turnstile': True},
-            {'code': 0, 'points': 1}, mode=None, exchange_plan='',
+            {'code': 0, 'points': 1}, mode='legacy', exchange_plan='',
         )
         self.assertIs(report.entries[0].result.code, checkin.CheckinStatus.SUCCESS)
         self.assertEqual(report.entries[0].result.points, 1)
@@ -120,6 +120,15 @@ class CheckinDiagnosticsTests(unittest.TestCase):
         request = next(r for r in calls if r.url.endswith('/checkin'))
         self.assertEqual(request.body, 'token=glados.cloud')
         self.assertEqual(request.headers['Content-Type'], 'application/x-www-form-urlencoded')
+
+    def test_default_mode_observes_explicit_verification_requirement(self):
+        report, calls = self.run_account(
+            {'code': 0, 'nonce': 'test-nonce', 'turnstile': True}, mode=None,
+        )
+        self.assertIs(report.entries[0].result.code, checkin.CheckinStatus.FAILURE)
+        self.assertEqual([r.url.rsplit('/', 1)[-1] for r in calls],
+                         ['status', 'challenge', 'points'])
+        self.assertIn('本次未提交签到', report.entries[0].result.failure_reason)
 
     def test_legacy_server_rejection_stays_failed_and_is_not_replayed(self):
         report, calls = self.run_account(
