@@ -59,6 +59,32 @@ class BrowserCheckinTests(unittest.TestCase):
                                        'glados.cloud', lambda *args: None)
         self.assertIs(result.code, checkin.CheckinStatus.FAILURE)
 
+    def test_diagnostic_never_copies_secrets_or_unknown_fields(self):
+        diagnostic = checkin.browser_submission_diagnostic({
+            'tsState': 'timeout', 'turnstile': 'PRIVATE_TOKEN',
+            'nonce': 'PRIVATE_NONCE', 'proof': 'PRIVATE_PROOF',
+        })
+        self.assertEqual(diagnostic, {'state': 'timeout', 'token_present': True})
+        self.assertNotIn('PRIVATE', repr(diagnostic))
+        self.assertEqual(checkin.browser_submission_diagnostic({'tsState': 'PRIVATE'}),
+                         {'state': 'unknown', 'token_present': False})
+
+    def test_timeout_and_server_rejection_are_distinct(self):
+        for state, expected in [('timeout', '等待超时'), ('error', '发生错误'),
+                                ('ok', '已生成验证结果')]:
+            result = checkin.parse_checkin({
+                'code': 4, 'reason': 'turnstile',
+                'browser_diagnostic': {'state': state, 'token_present': True},
+            }, 'glados.cloud', lambda *args: None)
+            self.assertIn(expected, result.failure_reason)
+            self.assertIs(result.code, checkin.CheckinStatus.FAILURE)
+
+    def test_browser_failure_stage_is_safe_and_specific(self):
+        result = checkin.parse_checkin({
+            'client_error': 'browser-unavailable', 'browser_stage': 'button',
+        }, 'glados.cloud', lambda *args: None)
+        self.assertIn('查找签到按钮', result.failure_reason)
+
     def test_missing_browser_is_actionable(self):
         result = checkin.parse_checkin({'client_error': 'browser-unavailable'},
                                        'glados.cloud', lambda *args: None)
