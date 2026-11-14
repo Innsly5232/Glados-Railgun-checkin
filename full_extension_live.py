@@ -96,12 +96,22 @@ def run_extension(runtime, entry, allowed_emails):
             stage = 'popup-button'
             run_button.wait_for(state='visible', timeout=30000)
             stage = 'popup-refresh'
-            popup.wait_for_function("""async () => {
-                const s = await chrome.storage.local.get(['lastRefresh','journal','accounts']);
-                return !!s.lastRefresh && !s.journal && s.accounts?.length > 0;
-            }""", timeout=90000)
-            stage = 'popup-ready'
-            popup.wait_for_function("!document.getElementById('run').disabled", timeout=90000)
+            # Extension pages apply CSP to injected polling code. Read readiness
+            # directly instead of wait_for_function's generated expression.
+            ready_deadline = time.monotonic() + 100
+            while time.monotonic() < ready_deadline:
+                ready = popup.evaluate("""async () => {
+                    const s = await chrome.storage.local.get(['lastRefresh','journal','accounts','lastError']);
+                    return {ready:!!s.lastRefresh && !s.journal && s.accounts?.length > 0 &&
+                        document.getElementById('run')?.disabled === false, failed:!!s.lastError};
+                }""")
+                if ready['ready']:
+                    break
+                if ready['failed']:
+                    raise RuntimeError('Extension account refresh failed')
+                popup.wait_for_timeout(250)
+            else:
+                raise RuntimeError('Extension account refresh timed out')
             stage = 'run'
             run_button.click(timeout=15000)
             evidence['popup_run_clicked'] = True
@@ -132,6 +142,9 @@ def run_extension(runtime, entry, allowed_emails):
             return {'evidence': {**evidence, 'failure_stage': 'result-timeout'}, 'items': []}
         except Exception as error:
             evidence['failure_type'] = type(error).__name__
+            evidence['failure_flags'] = [flag for flag in (
+                'unsafe-eval','EvalError','Refused to evaluate','Target closed',
+                'Execution context','Timeout','refresh failed','refresh timed out') if flag in str(error)]
             if 'popup' in locals():
                 try:
                     evidence['popup_diagnostic'] = popup.evaluate("""async () => {
