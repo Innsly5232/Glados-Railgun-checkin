@@ -1,3 +1,3 @@
 https://github.com/zzusec/glados-checkin
 commit d23fd0968be88320e606162d9dca020c71603d04
-Only pageAction(checkin) is used. Redemption is never invoked by this adapter.
+Runtime files and unit tests copied unchanged.

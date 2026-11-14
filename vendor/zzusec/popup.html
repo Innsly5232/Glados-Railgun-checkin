@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>多账号签到</title>
+  <link rel="stylesheet" href="popup.css">
+  <script type="module" src="popup.js"></script>
+</head>
+<body>
+  <header>
+    <img src="icons/48.png" width="38" height="38" alt="">
+    <div><h1>多账号签到</h1><p>GLaDOS · 非官方助手</p></div>
+    <button id="refresh" class="icon-button" title="刷新网站账号" aria-label="刷新网站账号">↻</button>
+  </header>
+  <main>
+    <div class="section-heading"><h2>已登录账号</h2><span id="account-count"></span></div>
+    <div id="accounts" class="accounts" aria-live="polite"></div>
+    <div class="actions">
+      <button id="run" class="primary">全部签到</button>
+      <button id="add" class="secondary">添加账号</button>
+    </div>
+    <p class="hint">仍在网站登录，不交出密码或 Cookie。自动兑换开启时，签到后会按规则使用积分。</p>
+    <div id="message" class="message" role="status" hidden></div>
+    <button id="restore" class="restore" hidden>重试恢复原账号</button>
+    <section class="schedule">
+      <label><input id="automatic" type="checkbox"><span>自动签到</span><span class="times">09:35 / 21:35</span></label>
+      <p>按本机时间执行；Chrome 关闭时不运行，重新打开后补检。首次启用前请停用旧版签到任务。</p>
+    </section>
+    <section class="schedule">
+      <label><input id="auto-redeem" type="checkbox"><span>自动兑换天数</span><span class="times">优先攒 500 分</span></label>
+      <p>达到 500 按该档兑换，余分继续攒。若有效期不足以攒到 500，则组合兑换最多天数。按最近 7 次签到平均积分估算，另留 1 天。</p>
+    </section>
+    <details id="history"><summary>最近记录</summary><ol id="history-list"></ol></details>
+  </main>
+  <footer><span id="updated">正在连接…</span><a href="https://glados.cloud/console" target="_blank" rel="noopener noreferrer">打开 GLaDOS</a></footer>
+</body>
+</html>

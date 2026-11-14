@@ -18,6 +18,7 @@ on:
         options:
           - browser
           - extension
+          - full-extension
   push:
     branches: [ master ]
     paths-ignore:
@@ -87,23 +88,35 @@ jobs:
     # 执行 签到脚本
     - name: Running checkin
       run: |
+        entrypoint=checkin.py
+        if [ "${{ inputs.mode }}" = "full-extension" ]; then
+          entrypoint=full_extension_live.py
+        fi
         if [ "$RUNNER_OS" = "Linux" ]; then
-          xvfb-run -a python checkin.py
+          xvfb-run -a python "$entrypoint"
         else
-          python checkin.py
+          python "$entrypoint"
         fi
       env:
         # 云端 Chromium 运行官网流程，不依赖个人电脑。
-        GLADOS_CHECKIN_MODE: ${{ inputs.mode || 'browser' }}
+        GLADOS_CHECKIN_MODE: ${{ inputs.mode == 'full-extension' && 'browser' || inputs.mode || 'browser' }}
         GLADOS_BROWSER_HEADLESS: 'false'
         HERMES_WEBHOOK_SECRET: ${{ secrets.HERMES_WEBHOOK_SECRET }}
         HERMES_WEBHOOK_SSH_KEY: ${{ secrets.HERMES_WEBHOOK_SSH_KEY }}
         GLADOS_COOKIES: ${{ secrets.GLADOS_COOKIES }}
-        GLADOS_EXCHANGE_PLAN: ${{ inputs.mode == 'extension' && 'none' || secrets.GLADOS_EXCHANGE_PLAN }}
+        GLADOS_EXCHANGE_PLAN: ${{ contains(inputs.mode, 'extension') && 'none' || secrets.GLADOS_EXCHANGE_PLAN }}
         GLADOS_VERBOSE: ${{ secrets.GLADOS_VERBOSE }}
 
+    - name: Save full extension verification
+      if: ${{ !cancelled() && inputs.mode == 'full-extension' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: full-extension-verification
+        path: full-extension-result.json
+        if-no-files-found: warn
+
     - name: Keep alive
-      if: ${{ !cancelled() }}
+      if: ${{ !cancelled() && inputs.runner != 'oracle' }}
       uses: liskin/gh-workflow-keepalive@v1 
         
     - name: Delete workflow runs

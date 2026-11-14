@@ -1,0 +1,22 @@
+{
+  "manifest.json": "d617207d44d5157732618b6b6b7f6febf71fa50a9746bfb22d74e906ea3f5805",
+  "package.json": "22b3155b8ae96f7632331558622de4c5a47a331b243cacb60a8c4884b9395a8c",
+  "background.js": "ac78520b78dc13aaf18a6ad84743f4ef14902a0192451596c06e37a17dd0b4bc",
+  "page-api.js": "6939aca6401d505131ea3812d9b6c6a44cfe79698954d470b5b62d8daae2b8cc",
+  "runner.js": "6f07bb11e96a13bddf8cc64b870003f33e115be7debad936a85fc3f413d31e25",
+  "redemption.js": "18ab5cd5fc5393b1ffcbcaf4e49c7722826544a933123d16afbddc1fd17993e4",
+  "popup.js": "b27af1865f10b17cc50a40c56dcbe91f12b594f72965202a3d4202004ba8ef28",
+  "popup.html": "825fc44ff2fc58b07ba46c7402a30015a29e02870c2b54fff9a7f05d5eb95433",
+  "popup.css": "b79d5248af90893e91611433f9dfdfe3a8b2536c2e9765263e710769b3d5243c",
+  "LICENSE": "7e96c56a312e2026e7e540edc625800420a38a840c052fa3581f3c9e844dde18",
+  "icons/48.png": "b87458db425122ff5692622d459363a52d41e80b6a8974a3aa6bedf1973fcfe0",
+  "icons/128.png": "1941058a6d04f639f0a555ba2cf719eb8212841b0abf4296b5ec436e11fdb274",
+  "icons/16.png": "96be00e156498ea663002a0522b3873cf31108d526ac5107a8a7004296a716a2",
+  "tests/runner.test.mjs": "eaac42e8024450bb276dbcacb5dbbab30c083b18fbbadbaa2edfd4fb5c316c27",
+  "tests/redemption-runner.test.mjs": "62c1a59b8379bed802cc189a23db871b7a15e94a3883fcfc9f0fc83eba6c3dfc",
+  "tests/page-api.test.mjs": "ebb2205844bffaa8b3a2e4eabea98369bf401c8c8cf610931c5838c622dea790",
+  "tests/redemption.test.mjs": "9c0c1b33aa637b157f706741de1e4b98150759c705a7f7b109ec4f26ff0dfba6",
+  "tests/redemption-api.test.mjs": "efbdfc2eae6dacbbe49b8350825ee5bfc3a978aaedba5512393ade3ede06621d",
+  "tests/background.test.mjs": "961ed34ddd2ae1304a92858811d86203ba4242b5c92b8839a99e1c9fa834b9e9",
+  "tests/checkin-challenge.test.mjs": "070096d31286fd5c8cb40a072d2745e61b615ba51b53f475664568d074dd720e"
+}
