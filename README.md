@@ -40,13 +40,15 @@
 | `GLADOS_EXCHANGE_PLAN` | 否 | `plan100` / `plan200` / `plan500`，见[积分兑换](#积分兑换) |
 | `GLADOS_VERBOSE` | 否 | `true` / `1` / `yes` 输出详细日志 |
 
-### 自动签到兼容模式
+### 云端自动签到模式
 
-当前脚本和 Actions 默认使用 `GLADOS_CHECKIN_MODE=challenge`，沿用 nonce/proof 流程。设备平台自适应、账号域名探测和 Hermes 通知继续生效。
+GitHub Actions 使用 `GLADOS_CHECKIN_MODE=browser`：自动安装 Chromium，每个账号使用独立临时浏览器上下文，打开官网签到页并点击签到。运行在 GitHub 云端，无需个人电脑保持开机。
 
-2026-11-14 的运行 `43604238853` 已实测：GLaDOS 两个账号在 `legacy` 模式下仍被服务端要求 Turnstile 验证，回退旧协议未恢复签到；Railgun 返回重复签到。因此旧协议不作为默认恢复方案。
+脚本只根据官网签到 POST 的实际响应判断成功、重复或失败。浏览器运行官网自身的后台流程；不提取、伪造或重放验证 token。若官网要求人工交互或未取得结果，仍报告失败，不保证所有运行环境都能通过验证。
 
-保留 `GLADOS_CHECKIN_MODE=legacy` 供兼容旧站点时显式使用：直接提交账号域名的 `token` 表单，是否接受、奖励多少积分以服务端返回为准。两种模式均保留真实失败结果，不在服务端明确拒绝后更换协议重复提交；验证提示本身不算签到成功。
+保留 `challenge`（HTTP nonce/proof）与 `legacy`（旧 token 表单）供兼容旧站点显式使用。直接运行 Python 时默认仍为 `challenge`；如需浏览器模式，先安装依赖并执行 `python -m playwright install --with-deps chromium`，再设置 `GLADOS_CHECKIN_MODE=browser`。
+
+现有账号 JSON、域名探测、积分兑换配置与 Hermes 通知继续生效。`code=0, repeated=true` 记录为重复签到，不计为新获积分。
 
 ## 🔧配置 GLADOS_COOKIES
 
