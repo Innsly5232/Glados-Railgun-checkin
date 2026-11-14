@@ -1000,7 +1000,8 @@ class API:
 
     def _checkin_attempt(self, user_agent: str) -> Optional[Dict]:
         """发起一次签到请求并返回解析后的响应体；请求失败或响应非 JSON 返回 None"""
-        if self.checkin_mode == "browser":
+        # Railgun 仍使用旧版 API，没有 GLaDOS 的 /console/checkin 页面。
+        if self.checkin_mode == "browser" and self.domain != "railgun.info":
             return self._browser_checkin(user_agent)
         payload: Dict[str, str] = {"token": self.domain}
         # legacy 与更新前保持一致：直接发送 token 表单，由服务端决定是否接受。
@@ -1048,7 +1049,8 @@ class API:
                                 "url": f"https://{self.domain}", "secure": True})
         try:
             with sync_playwright() as playwright:
-                browser = playwright.chromium.launch(headless=True)
+                headless = os.environ.get("GLADOS_BROWSER_HEADLESS", "true").lower() not in ("false", "0", "no")
+                browser = playwright.chromium.launch(headless=headless)
                 try:
                     context = browser.new_context(user_agent=user_agent)
                     context.add_cookies(cookies)
