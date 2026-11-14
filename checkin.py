@@ -694,7 +694,8 @@ def parse_checkin(raw: Optional[Dict], domain: str, log: Callable[..., None], ua
                                  else "浏览器启动或页面加载失败，请检查 Chromium 安装及登录状态")
         stages = {"import": "缺少 Playwright", "launch": "启动浏览器", "context": "建立账号会话",
                   "navigate": "打开官网", "button": "查找签到按钮或登录已失效",
-                  "click": "点击签到", "response": "等待官网响应"}
+                  "click": "点击签到", "response": "等待官网响应",
+                  "identity": "核对当前账号", "verification": "等待官网验证"}
         stage = raw.get("browser_stage")
         if isinstance(stage, str) and stage in stages:
             result.failure_reason += "（阶段：" + stages[stage] + "）"
@@ -790,8 +791,8 @@ class API:
         self.verbose = verbose
         self.probing = probing
         self.user_agent = (user_agent or "").strip()
-        if checkin_mode not in ("legacy", "challenge", "browser"):
-            raise ValueError("checkin_mode 只支持 legacy / challenge / browser")
+        if checkin_mode not in ("legacy", "challenge", "browser", "extension"):
+            raise ValueError("checkin_mode 只支持 legacy / challenge / browser / extension")
         self.checkin_mode = checkin_mode
 
         if probing:
@@ -1026,6 +1027,14 @@ class API:
 
     def _checkin_attempt(self, user_agent: str) -> Optional[Dict]:
         """发起一次签到请求并返回解析后的响应体；请求失败或响应非 JSON 返回 None"""
+        if self.checkin_mode == "extension" and self.domain != "railgun.info":
+            from extension_checkin import checkin
+            raw = checkin(self.domain, self.cookie, user_agent)
+            diagnostic = raw.get("extension_diagnostic", {})
+            self.log(LogEmoji.INFO, "扩展云端诊断：submitted=" + str(diagnostic.get("submitted", False))
+                     + ", verification_required=" + str(diagnostic.get("verification_required", False))
+                     + ", error=" + str(diagnostic.get("verification_error", "none")), True)
+            return raw
         # Railgun 仍使用旧版 API，没有 GLaDOS 的 /console/checkin 页面。
         if self.checkin_mode == "browser" and self.domain != "railgun.info":
             return self._browser_checkin(user_agent)
@@ -1174,8 +1183,8 @@ class Config:
         self._load_accounts()
         self._load_exchange_plan()
         mode = self._get(self.ENV_CHECKIN_MODE) or self.DEFAULT_CHECKIN_MODE
-        if mode not in ("legacy", "challenge", "browser"):
-            raise ValueError("GLADOS_CHECKIN_MODE 只支持 legacy / challenge / browser")
+        if mode not in ("legacy", "challenge", "browser", "extension"):
+            raise ValueError("GLADOS_CHECKIN_MODE 只支持 legacy / challenge / browser / extension")
         self.checkin_mode = mode
 
         logger.info(f"{LogEmoji.INFO} 共加载了 {len(self.accounts)} 个账号用于签到。")

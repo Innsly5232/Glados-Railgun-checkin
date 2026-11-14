@@ -10,6 +10,13 @@ on:
         options:
           - ubuntu-latest
           - macos-latest
+      mode:
+        description: 'Check-in implementation for controlled live verification'
+        type: choice
+        default: browser
+        options:
+          - browser
+          - extension
   push:
     branches: [ master ]
     paths-ignore:
@@ -77,12 +84,12 @@ jobs:
         fi
       env:
         # 云端 Chromium 运行官网流程，不依赖个人电脑。
-        GLADOS_CHECKIN_MODE: browser
+        GLADOS_CHECKIN_MODE: ${{ inputs.mode || 'browser' }}
         GLADOS_BROWSER_HEADLESS: 'false'
         HERMES_WEBHOOK_SECRET: ${{ secrets.HERMES_WEBHOOK_SECRET }}
         HERMES_WEBHOOK_SSH_KEY: ${{ secrets.HERMES_WEBHOOK_SSH_KEY }}
         GLADOS_COOKIES: ${{ secrets.GLADOS_COOKIES }}
-        GLADOS_EXCHANGE_PLAN: ${{ secrets.GLADOS_EXCHANGE_PLAN }}
+        GLADOS_EXCHANGE_PLAN: ${{ inputs.mode == 'extension' && 'none' || secrets.GLADOS_EXCHANGE_PLAN }}
         GLADOS_VERBOSE: ${{ secrets.GLADOS_VERBOSE }}
 
     - name: Keep alive
