@@ -19,6 +19,7 @@ Thumbs.db
 # Logs
 logs
 *.log
+full-extension-result.json
 
 # Build
 build/

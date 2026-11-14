@@ -31,6 +31,7 @@ def safe_result(item):
         'submitted': item.get('checkinAttempted') is True,
         'verification_required': item.get('verificationRequired') is True,
         'verification_error': error,
+        'reason': item.get('reason') if item.get('reason') in ('turnstile','device-mismatch') else None,
         'unknown': item.get('unknown') is True,
         'reward': number(item.get('checkinPoints')),
         'balance': number(item.get('points')),
@@ -87,16 +88,19 @@ def run_extension(runtime, entry, allowed_emails):
                 return {'evidence': {**evidence, 'failure_stage': 'account-scope'}, 'items': []}
             evidence['account_count'] = len(identities['accounts'])
             popup = context.new_page()
-            stage = 'popup'
+            stage = 'popup-navigate'
             popup.goto(f'chrome-extension://{extension_id}/popup.html')
             # Opening the stock popup performs its native account refresh. Wait
             # for that to release the extension's own mutex before clicking.
             run_button = popup.get_by_role('button', name='全部签到', exact=True)
+            stage = 'popup-button'
             run_button.wait_for(state='visible', timeout=30000)
+            stage = 'popup-refresh'
             popup.wait_for_function("""async () => {
                 const s = await chrome.storage.local.get(['lastRefresh','journal','accounts']);
                 return !!s.lastRefresh && !s.journal && s.accounts?.length > 0;
             }""", timeout=90000)
+            stage = 'popup-ready'
             popup.wait_for_function("!document.getElementById('run').disabled", timeout=90000)
             stage = 'run'
             run_button.click(timeout=15000)
@@ -126,7 +130,21 @@ def run_extension(runtime, entry, allowed_emails):
                             pass
                 popup.wait_for_timeout(500)
             return {'evidence': {**evidence, 'failure_stage': 'result-timeout'}, 'items': []}
-        except Exception:
+        except Exception as error:
+            evidence['failure_type'] = type(error).__name__
+            if 'popup' in locals():
+                try:
+                    evidence['popup_diagnostic'] = popup.evaluate("""async () => {
+                        const s = await chrome.storage.local.get(['lastRefresh','journal','accounts','lastError']);
+                        const m = String(s.lastError || document.getElementById('message')?.textContent || '');
+                        return {button_present:!!document.getElementById('run'),
+                            button_disabled:document.getElementById('run')?.disabled,
+                            refresh_completed:!!s.lastRefresh, journal_present:!!s.journal,
+                            discovered_accounts:s.accounts?.length || 0, error_present:!!s.lastError,
+                            error_flags:['超时','没有权限','未返回','账号','code=','401','403','Failed to fetch','Cannot access','页面未返回有效执行结果'].filter(w => m.includes(w))};
+                    }""")
+                except Exception:
+                    evidence['popup_diagnostic'] = {'unavailable': True}
             return {'evidence': {**evidence, 'failure_stage': stage}, 'items': []}
         finally:
             context.close()
@@ -181,7 +199,8 @@ def main():
                     target.result.code = checkin.CheckinStatus.REPEAT if raw['already'] else checkin.CheckinStatus.SUCCESS
                     target.result.points = 0 if raw['already'] else checkin.to_int(raw['reward']) or 0
                 else:
-                    target.result.failure_reason = ('原版扩展要求官网人工验证' if raw['verification_required']
+                    target.result.failure_reason = ('原版扩展报告登录设备不匹配' if raw['reason'] == 'device-mismatch' else
+                                                    '原版扩展要求官网人工验证' if raw['verification_required']
                                                     else '原版扩展未确认签到成功')
             evidence['trials'].append(trial)
             print('FULL_EXTENSION_RESULT ' + json.dumps(trial, ensure_ascii=False))
