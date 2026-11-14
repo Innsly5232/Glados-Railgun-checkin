@@ -688,12 +688,20 @@ def parse_checkin(raw: Optional[Dict], domain: str, log: Callable[..., None], ua
         return result
 
     # 本地检测到 challenge 需要官网验证：未向签到接口提交请求。
+    if raw.get("client_error") in ("browser-unavailable", "browser-no-result"):
+        result.failure_reason = ("浏览器未取得签到结果，请检查登录状态或官网验证"
+                                 if raw["client_error"] == "browser-no-result"
+                                 else "浏览器启动或页面加载失败，请检查 Chromium 安装及登录状态")
+        log(LogEmoji.ERROR, result.failure_reason, True)
+        return result
     if raw.get("client_error") == "human-verification-required":
         result.failure_reason = "需要在官网完成人机验证，本次未提交签到"
         log(LogEmoji.ERROR, result.failure_reason, True)
         return result
 
     code = raw.get("code", -2)
+    if isinstance(code, str) and code.strip().isdigit():
+        code = int(code.strip())
     message = str(raw.get("message", "无消息字段"))
     points = earned_points(raw)
 
@@ -704,7 +712,10 @@ def parse_checkin(raw: Optional[Dict], domain: str, log: Callable[..., None], ua
         log(LogEmoji.ERROR, f"签到被拒：{message}（服务端认定签到域名不符）", True)
         return result
 
-    if code == CheckinStatus.SUCCESS.value:
+    if code == CheckinStatus.SUCCESS.value and raw.get("repeated") is True:
+        result.code = CheckinStatus.REPEAT
+        log(LogEmoji.REPEAT, "官网确认今天已签到", True)
+    elif code == CheckinStatus.SUCCESS.value:
         log(LogEmoji.SUCCESS, f"{{ code : {code}, points : {points}, message : {message} }}")
         result.points = points
         result.code = CheckinStatus.SUCCESS
@@ -753,8 +764,8 @@ class API:
         self.verbose = verbose
         self.probing = probing
         self.user_agent = (user_agent or "").strip()
-        if checkin_mode not in ("legacy", "challenge"):
-            raise ValueError("checkin_mode 只支持 legacy / challenge")
+        if checkin_mode not in ("legacy", "challenge", "browser"):
+            raise ValueError("checkin_mode 只支持 legacy / challenge / browser")
         self.checkin_mode = checkin_mode
 
         if probing:
@@ -989,6 +1000,8 @@ class API:
 
     def _checkin_attempt(self, user_agent: str) -> Optional[Dict]:
         """发起一次签到请求并返回解析后的响应体；请求失败或响应非 JSON 返回 None"""
+        if self.checkin_mode == "browser":
+            return self._browser_checkin(user_agent)
         payload: Dict[str, str] = {"token": self.domain}
         # legacy 与更新前保持一致：直接发送 token 表单，由服务端决定是否接受。
         # 不在服务端已拒绝验证后更换协议重试。
@@ -1018,6 +1031,58 @@ class API:
         except ValueError:
             self.log(LogEmoji.ERROR, "签到响应解析失败", force=True)
             return None
+
+    def _browser_checkin(self, user_agent: str) -> Optional[Dict]:
+        """由官网页面发起签到；不提取、伪造或重放浏览器验证 token。"""
+        try:
+            from playwright.sync_api import sync_playwright
+        except ImportError:
+            return {"client_error": "browser-unavailable"}
+
+        # 每个账号使用独立临时上下文，Cookie 只绑定已探测命中的 HTTPS 域名。
+        cookies = []
+        for part in self.cookie.split(";"):
+            name, separator, value = part.strip().partition("=")
+            if separator and name:
+                cookies.append({"name": name, "value": value,
+                                "url": f"https://{self.domain}", "secure": True})
+        try:
+            with sync_playwright() as playwright:
+                browser = playwright.chromium.launch(headless=True)
+                try:
+                    context = browser.new_context(user_agent=user_agent)
+                    context.add_cookies(cookies)
+                    page = context.new_page()
+                    results = []
+
+                    def on_response(response):
+                        # 只接受官网自身 POST 的结果；不记录请求、响应体或浏览器凭据。
+                        if (response.url == f"https://{self.domain}{APIEndpoint.CHECKIN}"
+                                and response.request.method == "POST"):
+                            try:
+                                data = response.json()
+                                if isinstance(data, dict):
+                                    results.append(data)
+                            except Exception:
+                                pass
+
+                    page.on("response", on_response)
+                    page.goto(f"https://{self.domain}/console/checkin",
+                              wait_until="domcontentloaded", timeout=30000)
+                    button = page.get_by_role("button", name=re.compile(r"^(Checkin|签到)$", re.I))
+                    button.wait_for(state="visible", timeout=20000)
+                    button.click(timeout=10000)
+                    deadline = time.monotonic() + 100
+                    while time.monotonic() < deadline:
+                        if results:
+                            return results[-1]
+                        page.wait_for_timeout(250)
+                    return {"client_error": "browser-no-result"}
+                finally:
+                    browser.close()
+        except Exception:
+            # 异常消息可能包含页面数据或 Cookie，固定诊断避免上传日志泄密。
+            return {"client_error": "browser-unavailable"}
 
 
 # --------------------------------------------------------------------------- #
@@ -1065,8 +1130,8 @@ class Config:
         self._load_accounts()
         self._load_exchange_plan()
         mode = self._get(self.ENV_CHECKIN_MODE) or self.DEFAULT_CHECKIN_MODE
-        if mode not in ("legacy", "challenge"):
-            raise ValueError("GLADOS_CHECKIN_MODE 只支持 legacy / challenge")
+        if mode not in ("legacy", "challenge", "browser"):
+            raise ValueError("GLADOS_CHECKIN_MODE 只支持 legacy / challenge / browser")
         self.checkin_mode = mode
 
         logger.info(f"{LogEmoji.INFO} 共加载了 {len(self.accounts)} 个账号用于签到。")
