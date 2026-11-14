@@ -50,14 +50,18 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
+        python -m playwright install --with-deps chromium
+
+    - name: Run regression tests
+      run: python -m unittest discover -s tests -q
 
     # 执行 签到脚本
     - name: Running checkin
       run: |
         python checkin.py
       env:
-        # GLaDOS 已实测拒绝旧协议；保留标准 challenge 流程。
-        GLADOS_CHECKIN_MODE: challenge
+        # 云端 Chromium 运行官网流程，不依赖个人电脑。
+        GLADOS_CHECKIN_MODE: browser
         HERMES_WEBHOOK_SECRET: ${{ secrets.HERMES_WEBHOOK_SECRET }}
         HERMES_WEBHOOK_SSH_KEY: ${{ secrets.HERMES_WEBHOOK_SSH_KEY }}
         GLADOS_COOKIES: ${{ secrets.GLADOS_COOKIES }}
