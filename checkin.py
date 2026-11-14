@@ -692,6 +692,12 @@ def parse_checkin(raw: Optional[Dict], domain: str, log: Callable[..., None], ua
         result.failure_reason = ("浏览器未取得签到结果，请检查登录状态或官网验证"
                                  if raw["client_error"] == "browser-no-result"
                                  else "浏览器启动或页面加载失败，请检查 Chromium 安装及登录状态")
+        stages = {"import": "缺少 Playwright", "launch": "启动浏览器", "context": "建立账号会话",
+                  "navigate": "打开官网", "button": "查找签到按钮或登录已失效",
+                  "click": "点击签到", "response": "等待官网响应"}
+        stage = raw.get("browser_stage")
+        if isinstance(stage, str) and stage in stages:
+            result.failure_reason += "（阶段：" + stages[stage] + "）"
         log(LogEmoji.ERROR, result.failure_reason, True)
         return result
     if raw.get("client_error") == "human-verification-required":
@@ -725,6 +731,15 @@ def parse_checkin(raw: Optional[Dict], domain: str, log: Callable[..., None], ua
     else:
         if raw.get("reason") == "turnstile":
             result.failure_reason = "需要在官网完成人机验证，请在签到页处理后核对结果"
+            diagnostic = raw.get("browser_diagnostic")
+            if isinstance(diagnostic, dict):
+                state = diagnostic.get("state")
+                if state == "timeout":
+                    result.failure_reason = "网页后台验证等待超时，官网未接受本次签到"
+                elif state == "error":
+                    result.failure_reason = "网页后台验证发生错误，官网未接受本次签到"
+                elif state == "ok" and diagnostic.get("token_present") is True:
+                    result.failure_reason = "网页已生成验证结果，但官网拒绝接受"
         elif code == 4 and raw.get("reason") == "device-mismatch":
             result.failure_reason = "登录设备不匹配，请将 user-agent 设为登录浏览器的完整 User-Agent"
         elif code == -2:
@@ -739,6 +754,17 @@ def parse_checkin(raw: Optional[Dict], domain: str, log: Callable[..., None], ua
 # --------------------------------------------------------------------------- #
 # API：绑定 (域名, Cookie) 的单站点会话
 # --------------------------------------------------------------------------- #
+
+
+def browser_submission_diagnostic(submitted: Any) -> Dict:
+    """从官网请求中选取最小诊断；不返回任何验证结果值或其他请求字段。"""
+    if not isinstance(submitted, dict):
+        return {"state": "unknown", "token_present": False}
+    state = submitted.get("tsState")
+    if not isinstance(state, str) or state not in ("off", "ok", "timeout", "error", "none"):
+        state = "unknown"
+    token = submitted.get("turnstile")
+    return {"state": state, "token_present": isinstance(token, str) and bool(token)}
 
 
 class API:
@@ -1038,7 +1064,7 @@ class API:
         try:
             from playwright.sync_api import sync_playwright
         except ImportError:
-            return {"client_error": "browser-unavailable"}
+            return {"client_error": "browser-unavailable", "browser_stage": "import"}
 
         # 每个账号使用独立临时上下文，Cookie 只绑定已探测命中的 HTTPS 域名。
         cookies = []
@@ -1047,11 +1073,13 @@ class API:
             if separator and name:
                 cookies.append({"name": name, "value": value,
                                 "url": f"https://{self.domain}", "secure": True})
+        stage = "launch"
         try:
             with sync_playwright() as playwright:
                 headless = os.environ.get("GLADOS_BROWSER_HEADLESS", "true").lower() not in ("false", "0", "no")
                 browser = playwright.chromium.launch(headless=headless)
                 try:
+                    stage = "context"
                     context = browser.new_context(user_agent=user_agent)
                     context.add_cookies(cookies)
                     page = context.new_page()
@@ -1064,27 +1092,41 @@ class API:
                             try:
                                 data = response.json()
                                 if isinstance(data, dict):
+                                    # 只保留状态枚举及是否有结果，绝不记录 token/nonce/proof。
+                                    try:
+                                        submitted = response.request.post_data_json
+                                    except Exception:
+                                        submitted = None
+                                    diagnostic = browser_submission_diagnostic(submitted)
+                                    data["browser_diagnostic"] = diagnostic
+                                    self.log(LogEmoji.INFO,
+                                             "浏览器验证诊断：state=" + diagnostic["state"]
+                                             + ", token_present=" + str(diagnostic["token_present"]), True)
                                     results.append(data)
                             except Exception:
                                 pass
 
                     page.on("response", on_response)
+                    stage = "navigate"
                     page.goto(f"https://{self.domain}/console/checkin",
                               wait_until="domcontentloaded", timeout=30000)
+                    stage = "button"
                     button = page.get_by_role("button", name=re.compile(r"^(Checkin|签到)$", re.I))
                     button.wait_for(state="visible", timeout=20000)
+                    stage = "click"
                     button.click(timeout=10000)
+                    stage = "response"
                     deadline = time.monotonic() + 100
                     while time.monotonic() < deadline:
                         if results:
                             return results[-1]
                         page.wait_for_timeout(250)
-                    return {"client_error": "browser-no-result"}
+                    return {"client_error": "browser-no-result", "browser_stage": stage}
                 finally:
                     browser.close()
         except Exception:
             # 异常消息可能包含页面数据或 Cookie，固定诊断避免上传日志泄密。
-            return {"client_error": "browser-unavailable"}
+            return {"client_error": "browser-unavailable", "browser_stage": stage}
 
 
 # --------------------------------------------------------------------------- #
