@@ -72,6 +72,16 @@ def checkin(domain, cookie, user_agent):
                 page = context.new_page()
                 stage = "navigate"
                 page.goto("https://glados.cloud/console", wait_until="domcontentloaded", timeout=30000)
+                # Observe the page's own interaction prompt, without inspecting
+                # challenge internals or automating any verification controls.
+                page.evaluate("""() => {
+                    window.__gladosTrialInteractive = false;
+                    new MutationObserver(() => {
+                        const panel = document.getElementById('glados-checkin-verification');
+                        if (panel?.textContent.includes('请在下方完成官网验证'))
+                            window.__gladosTrialInteractive = true;
+                    }).observe(document.body, {subtree:true, childList:true, characterData:true});
+                }""")
                 # Verify this context's current identity; do not enumerate or sign
                 # any other account saved by the website's multi-account feature.
                 stage = "identity"
@@ -95,7 +105,10 @@ def checkin(domain, cookie, user_agent):
                 result = page.evaluate("async input => {\n" + source +
                                        "\nreturn await pageAction(input); }",
                                        {"op": "checkin", "account": account, "interactive": True})
-                return summarize(result)
+                raw = summarize(result)
+                raw.setdefault("extension_diagnostic", {})["interactive_prompt"] = page.evaluate(
+                    "window.__gladosTrialInteractive === true")
+                return raw
             finally:
                 browser.close()
     except Exception:

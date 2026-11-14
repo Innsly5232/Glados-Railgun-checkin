@@ -1033,6 +1033,7 @@ class API:
             diagnostic = raw.get("extension_diagnostic", {})
             self.log(LogEmoji.INFO, "扩展云端诊断：submitted=" + str(diagnostic.get("submitted", False))
                      + ", verification_required=" + str(diagnostic.get("verification_required", False))
+                     + ", interactive_prompt=" + str(diagnostic.get("interactive_prompt", False))
                      + ", error=" + str(diagnostic.get("verification_error", "none")), True)
             return raw
         # Railgun 仍使用旧版 API，没有 GLaDOS 的 /console/checkin 页面。
@@ -1378,8 +1379,14 @@ class PushService:
                 hermes_notify.send(title, content, route=self.HERMES_ROUTE)
                 logger.info("Hermes confirmed WeChat notification delivery.")
                 return True
-            except Exception:
-                logger.error("Hermes notification was not confirmed.")
+            except Exception as error:
+                safe_errors = {
+                    "Hermes GitHub Secrets are missing", "Pinned SSH host key is missing",
+                    "Restricted SSH connection failed", "Hermes webhook did not become ready",
+                    "Hermes did not confirm delivery", "Hermes notification was not confirmed",
+                }
+                detail = str(error) if type(error).__name__ == "NotificationError" and str(error) in safe_errors else "details omitted"
+                logger.error("Hermes notification was not confirmed. (%s)", detail)
                 return False
 
         logger.warning(f"{LogEmoji.WARNING} 未设置 {Config.ENV_HERMES_SECRET}，跳过推送通知。")

@@ -10,6 +10,7 @@ on:
         options:
           - ubuntu-latest
           - macos-latest
+          - oracle
       mode:
         description: 'Check-in implementation for controlled live verification'
         type: choice
@@ -34,7 +35,7 @@ concurrency:
 jobs:
   build:
     name: glados/railgun checkin
-    runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
+    runs-on: ${{ inputs.runner == 'oracle' && fromJSON('["self-hosted","glados-checkin-trial"]') || inputs.runner || 'ubuntu-latest' }}
 
     # 脚本自带 5 分钟运行预算；这里再兜底，避免异常情况卡住
     timeout-minutes: 15
@@ -56,17 +57,26 @@ jobs:
       uses: actions/checkout@v6
 
     - name: Set up Python ${{ matrix.python-version }}
+      if: ${{ inputs.runner != 'oracle' }}
       uses: actions/setup-python@v6
       with:
         python-version: ${{ matrix.python-version }}
+
+    - name: Use isolated Oracle Python
+      if: ${{ inputs.runner == 'oracle' }}
+      run: |
+        echo /var/lib/glados-runner/venv/bin >> "$GITHUB_PATH"
+        echo PLAYWRIGHT_BROWSERS_PATH=/var/lib/glados-runner/browsers >> "$GITHUB_ENV"
 
     # 安装 python 库
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        python -m playwright install --with-deps chromium
-        if [ "$RUNNER_OS" = "Linux" ]; then
+        if [ "${{ inputs.runner }}" != "oracle" ]; then
+          python -m playwright install --with-deps chromium
+        fi
+        if [ "$RUNNER_OS" = "Linux" ] && [ "${{ inputs.runner }}" != "oracle" ]; then
           sudo apt-get update
           sudo apt-get install -y xvfb
         fi
