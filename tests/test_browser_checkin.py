@@ -37,6 +37,17 @@ class BrowserCheckinTests(unittest.TestCase):
         ])
         playwright.chromium.launch.assert_called_once_with(headless=True)
 
+    def test_railgun_keeps_working_api_without_browser(self):
+        response = MagicMock()
+        response.json.return_value = {'code': 1}
+        with checkin.API('railgun.info', 'koa:sess=test', checkin_mode='browser') as api, \
+                patch.object(api, 'request', return_value=response) as request, \
+                patch.object(api, '_browser_checkin') as browser:
+            result = api.checkin()
+        self.assertIs(result.code, checkin.CheckinStatus.REPEAT)
+        browser.assert_not_called()
+        self.assertEqual(request.call_args.kwargs['data'], {'token': 'railgun.info'})
+
     def test_repeated_response_is_not_new_points(self):
         result = checkin.parse_checkin({'code': '0', 'repeated': True, 'points': 2},
                                        'glados.cloud', lambda *args: None)
